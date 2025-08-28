@@ -3,8 +3,8 @@ import { Shape, ShapeConfig } from '../Shape';
 import { GetSet, Vector2d } from '../types';
 import { getNumberOrArrayOfNumbersValidator, getNumberValidator } from '../Validators';
 import { _registerNode } from '../Global';
-import { Context } from '../Context';
 import { Util } from '../Util';
+import * as PIXI from "pixi.js";
 
 export interface RegularPolygonConfig extends ShapeConfig {
   sides: number;
@@ -34,25 +34,36 @@ export interface RegularPolygonConfig extends ShapeConfig {
  * });
  */
 export class RegularPolygon extends Shape<RegularPolygonConfig> {
-  _sceneFunc(context: Context) {
+  _object: PIXI.Graphics;
+
+  constructor(config?: RegularPolygonConfig) {
+    super(config)
+    const graphics: PIXI.Graphics = new PIXI.Graphics();
+    this._object = graphics;
+
     const points = this._getPoints(),
       radius = this.radius(),
       sides = this.sides(),
       cornerRadius = this.cornerRadius();
 
-    context.beginPath();
+    graphics.beginPath();
 
     if (!cornerRadius) {
-      context.moveTo(points[0].x, points[0].y);
+      graphics.moveTo(points[0].x, points[0].y);
       for (let n = 1; n < points.length; n++) {
-        context.lineTo(points[n].x, points[n].y);
+        graphics.lineTo(points[n].x, points[n].y);
       }
     } else {
-      Util.drawRoundedPolygonPath(context, points, sides, radius, cornerRadius);
+      Util.drawRoundedPolygonPath(graphics, points, sides, radius, cornerRadius);
     }
 
-    context.closePath();
-    context.fillStrokeShape(this);
+    graphics
+      .closePath()
+      .fill(this.fill() ?? 0xffffff)
+      .setStrokeStyle({
+          width: this.strokeWidth() ?? 0, 
+          color: this.stroke() ?? 0x000000
+      });
   }
   _getPoints() {
     const sides = this.attrs.sides as number;

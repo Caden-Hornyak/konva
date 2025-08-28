@@ -4,12 +4,18 @@ import { _registerNode } from '../Global';
 
 import { Util } from '../Util';
 import { GetSet } from '../types';
-import { Context } from '../Context';
 import { getNumberOrArrayOfNumbersValidator } from '../Validators';
+import * as PIXI from "pixi.js";
+import { stages } from '../Stage';
+
+const TEXTURE_WIDTH = 64,
+      TEXTURE_HEIGHT = 64;
 
 export interface RectConfig extends ShapeConfig {
   cornerRadius?: number | number[];
 }
+
+const textureCache: Record<string, PIXI.Texture> = {};
 
 /**
  * Rect constructor
@@ -30,23 +36,57 @@ export interface RectConfig extends ShapeConfig {
  * });
  */
 export class Rect extends Shape<RectConfig> {
-  _sceneFunc(context: Context) {
+  _object: PIXI.NineSlicePlane
+
+  constructor(config?: RectConfig) {
+    super(config);
+
+    const graphics: PIXI.Graphics = new PIXI.Graphics();
     const cornerRadius = this.cornerRadius(),
       width = this.width(),
-      height = this.height();
+      height = this.height(),
+      x = this.x(),
+      y = this.y();
 
-    context.beginPath();
+    graphics.beginPath();
 
+    let cornerRadiusList: number[] = [0, 0, 0, 0];
+    
     if (!cornerRadius) {
-      // simple rect - don't bother doing all that complicated maths stuff.
-      context.rect(0, 0, width, height);
+      graphics
+      .rect(0, 0, TEXTURE_WIDTH, TEXTURE_HEIGHT)
+      .fill(0xFFFFFF)
+      .setStrokeStyle({
+          width: this.strokeWidth() ?? 0, 
+          color: this.stroke() ?? 0x000000
+      });
     } else {
-      Util.drawRoundedRectPath(context, width, height, cornerRadius);
+      cornerRadiusList = Util.drawRoundedRectPath(graphics, TEXTURE_WIDTH, TEXTURE_HEIGHT, cornerRadius);
+      graphics.fill(0xFFFFFF)
     }
-    context.closePath();
-    context.fillStrokeShape(this);
-  }
 
+    let texture: PIXI.Texture;
+    const textureKey = `${cornerRadiusList[0]}_${cornerRadiusList[1]}_${cornerRadiusList[2]}_${cornerRadiusList[3]}`;
+    if (textureCache[textureKey]) {
+      texture = textureCache[textureKey];
+    } else {
+      texture = stages[0].application.renderer.generateTexture(graphics);
+      textureCache[textureKey] = texture;
+    }
+    this._object = new PIXI.NineSlicePlane(
+      texture, 
+      Math.max(cornerRadiusList[0], cornerRadiusList[3]),
+      Math.max(cornerRadiusList[1], cornerRadiusList[1]),
+      Math.max(cornerRadiusList[1], cornerRadiusList[2]),
+      Math.max(cornerRadiusList[2], cornerRadiusList[3]),
+    );
+    this._object.tint = this.fill() ?? 0xFF0000;
+    this._object.width = width;
+    this._object.height = height
+    this._object.x = x;
+    this._object.y = y;
+  }
+  
   cornerRadius: GetSet<number | number[], this>;
 }
 
@@ -74,5 +114,5 @@ Factory.addGetterSetter(
   Rect,
   'cornerRadius',
   0,
-  getNumberOrArrayOfNumbersValidator(4)
+  getNumberOrArrayOfNumbersValidator(4),
 );

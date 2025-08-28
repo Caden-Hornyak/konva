@@ -62,6 +62,8 @@
   ],
   "devDependencies": {
     "@parcel/transformer-image": "2.13.2",
+    "@rollup/plugin-commonjs": "^28.0.6",
+    "@rollup/plugin-node-resolve": "^16.0.1",
     "@size-limit/preset-big-lib": "^11.1.6",
     "@types/mocha": "^10.0.10",
     "canvas": "^3.1.0",
@@ -107,5 +109,8 @@
     "type": "git",
     "url": "git://github.com/konvajs/konva.git"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "pixi.js": "^8.12.0"
+  }
 }

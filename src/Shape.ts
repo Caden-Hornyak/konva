@@ -9,18 +9,10 @@ import {
   getBooleanValidator,
   getStringOrGradientValidator,
 } from './Validators';
-
-import { Context, SceneContext } from './Context';
+import * as PIXI from "pixi.js";
 import { _registerNode } from './Global';
-import * as PointerEvents from './PointerEvents';
 
 import { GetSet, Vector2d } from './types';
-import { HitCanvas, SceneCanvas } from './Canvas';
-
-// hack from here https://stackoverflow.com/questions/52667959/what-is-the-purpose-of-bivariancehack-in-typescript-types/52668133#52668133
-export type ShapeConfigHandler<TTarget> = {
-  bivarianceHack(ctx: Context, shape: TTarget): void;
-}['bivarianceHack'];
 
 export type LineJoin = 'round' | 'bevel' | 'miter';
 export type LineCap = 'butt' | 'round' | 'square';
@@ -59,15 +51,9 @@ export interface ShapeConfig extends NodeConfig {
   fillRule?: CanvasFillRule;
   stroke?: string | CanvasGradient;
   strokeWidth?: number;
-  fillAfterStrokeEnabled?: boolean;
-  hitStrokeWidth?: number | string;
-  strokeScaleEnabled?: boolean;
-  strokeHitEnabled?: boolean;
   strokeEnabled?: boolean;
   lineJoin?: LineJoin;
   lineCap?: LineCap;
-  sceneFunc?: (con: Context, shape: Shape) => void;
-  hitFunc?: (con: Context, shape: Shape) => void;
   shadowColor?: string;
   shadowBlur?: number;
   shadowOffset?: Vector2d;
@@ -94,71 +80,7 @@ export type FillFuncOutput =
   | [Path2D | CanvasFillRule]
   | [Path2D, CanvasFillRule];
 
-const HAS_SHADOW = 'hasShadow';
-const SHADOW_RGBA = 'shadowRGBA';
-const patternImage = 'patternImage';
-const linearGradient = 'linearGradient';
-const radialGradient = 'radialGradient';
-
-let dummyContext: CanvasRenderingContext2D;
-function getDummyContext(): CanvasRenderingContext2D {
-  if (dummyContext) {
-    return dummyContext;
-  }
-  dummyContext = Util.createCanvasElement().getContext('2d')!;
-  return dummyContext;
-}
-
 export const shapes: { [key: string]: Shape } = {};
-
-// TODO: idea - use only "remove" (or destroy method)
-// how? on add, check that every inner shape has reference in konva store with color
-// on remove - clear that reference
-// the approach is good. But what if we want to cache the shape before we add it into the stage
-// what color to use for hit test?
-
-function _fillFunc(this: Node, context) {
-  const fillRule = this.attrs.fillRule;
-  if (fillRule) {
-    context.fill(fillRule);
-  } else {
-    context.fill();
-  }
-}
-function _strokeFunc(context) {
-  context.stroke();
-}
-function _fillFuncHit(this: Node, context) {
-  const fillRule = this.attrs.fillRule;
-  if (fillRule) {
-    context.fill(fillRule);
-  } else {
-    context.fill();
-  }
-}
-function _strokeFuncHit(context) {
-  context.stroke();
-}
-
-function _clearHasShadowCache(this: Node) {
-  this._clearCache(HAS_SHADOW);
-}
-
-function _clearGetShadowRGBACache(this: Node) {
-  this._clearCache(SHADOW_RGBA);
-}
-
-function _clearFillPatternCache(this: Node) {
-  this._clearCache(patternImage);
-}
-
-function _clearLinearGradientCache(this: Node) {
-  this._clearCache(linearGradient);
-}
-
-function _clearRadialGradientCache(this: Node) {
-  this._clearCache(radialGradient);
-}
 
 /**
  * Shape constructor.  Shapes are primitive objects such as rectangles,
@@ -192,11 +114,6 @@ export class Shape<
   _centroid: boolean;
   colorKey: string;
 
-  _fillFunc: (ctx: Context) => FillFuncOutput;
-  _strokeFunc: (ctx: Context) => void;
-  _fillFuncHit: (ctx: Context) => void;
-  _strokeFuncHit: (ctx: Context) => void;
-
   constructor(config?: Config) {
     super(config);
     // set colorKey
@@ -214,156 +131,134 @@ export class Shape<
   }
 
   /**
-   * @deprecated 
-   */
-  getContext() {
-    Util.warn('shape.getContext() method is deprecated. Please do not use it.');
-    return this.getLayer()!.getContext();
-  }
-  /**
-   * @deprecated 
-   */
-  getCanvas() {
-    Util.warn('shape.getCanvas() method is deprecated. Please do not use it.');
-    return this.getLayer()!.getCanvas();
-  }
-
-  getSceneFunc() {
-    return this.attrs.sceneFunc || this['_sceneFunc'];
-  }
-
-  getHitFunc() {
-    return this.attrs.hitFunc || this['_hitFunc'];
-  }
-  /**
    * returns whether or not a shadow will be rendered
    * @method
    * @name Konva.Shape#hasShadow
    * @returns {Boolean}
    */
-  hasShadow() {
-    return this._getCache(HAS_SHADOW, this._hasShadow);
-  }
-  _hasShadow() {
-    return (
-      this.shadowEnabled() &&
-      this.shadowOpacity() !== 0 &&
-      !!(
-        this.shadowColor() ||
-        this.shadowBlur() ||
-        this.shadowOffsetX() ||
-        this.shadowOffsetY()
-      )
-    );
-  }
-  _getFillPattern() {
-    return this._getCache(patternImage, this.__getFillPattern);
-  }
-  __getFillPattern() {
-    if (this.fillPatternImage()) {
-      const ctx = getDummyContext();
-      const pattern = ctx.createPattern(
-        this.fillPatternImage(),
-        this.fillPatternRepeat() || 'repeat'
-      );
-      if (pattern && pattern.setTransform) {
-        const tr = new Transform();
+//   hasShadow() {
+//     return this._getCache(HAS_SHADOW, this._hasShadow);
+//   }
+//   _hasShadow() {
+//     return (
+//       this.shadowEnabled() &&
+//       this.shadowOpacity() !== 0 &&
+//       !!(
+//         this.shadowColor() ||
+//         this.shadowBlur() ||
+//         this.shadowOffsetX() ||
+//         this.shadowOffsetY()
+//       )
+//     );
+//   }
+//   _getFillPattern() {
+//     return this._getCache(patternImage, this.__getFillPattern);
+//   }
+//   __getFillPattern() {
+//     if (this.fillPatternImage()) {
+//       const ctx = getDummyContext();
+//       const pattern = ctx.createPattern(
+//         this.fillPatternImage(),
+//         this.fillPatternRepeat() || 'repeat'
+//       );
+//       if (pattern && pattern.setTransform) {
+//         const tr = new Transform();
 
-        tr.translate(this.fillPatternX(), this.fillPatternY());
-        tr.rotate(Konva.getAngle(this.fillPatternRotation()));
-        tr.scale(this.fillPatternScaleX(), this.fillPatternScaleY());
-        tr.translate(
-          -1 * this.fillPatternOffsetX(),
-          -1 * this.fillPatternOffsetY()
-        );
+//         tr.translate(this.fillPatternX(), this.fillPatternY());
+//         tr.rotate(Konva.getAngle(this.fillPatternRotation()));
+//         tr.scale(this.fillPatternScaleX(), this.fillPatternScaleY());
+//         tr.translate(
+//           -1 * this.fillPatternOffsetX(),
+//           -1 * this.fillPatternOffsetY()
+//         );
 
-        const m = tr.getMatrix();
+//         const m = tr.getMatrix();
 
-        const matrix =
-          typeof DOMMatrix === 'undefined'
-            ? {
-                a: m[0], // Horizontal scaling. A value of 1 results in no scaling.
-                b: m[1], // Vertical skewing.
-                c: m[2], // Horizontal skewing.
-                d: m[3],
-                e: m[4], // Horizontal translation (moving).
-                f: m[5], // Vertical translation (moving).
-              }
-            : new DOMMatrix(m);
+//         const matrix =
+//           typeof DOMMatrix === 'undefined'
+//             ? {
+//                 a: m[0], // Horizontal scaling. A value of 1 results in no scaling.
+//                 b: m[1], // Vertical skewing.
+//                 c: m[2], // Horizontal skewing.
+//                 d: m[3],
+//                 e: m[4], // Horizontal translation (moving).
+//                 f: m[5], // Vertical translation (moving).
+//               }
+//             : new DOMMatrix(m);
 
-        pattern.setTransform(matrix);
-      }
-      return pattern;
-    }
-  }
-  _getLinearGradient() {
-    return this._getCache(linearGradient, this.__getLinearGradient);
-  }
-  __getLinearGradient() {
-    const colorStops = this.fillLinearGradientColorStops();
-    if (colorStops) {
-      const ctx = getDummyContext();
+//         pattern.setTransform(matrix);
+//       }
+//       return pattern;
+//     }
+//   }
+//   _getLinearGradient() {
+//     return this._getCache(linearGradient, this.__getLinearGradient);
+//   }
+//   __getLinearGradient() {
+//     const colorStops = this.fillLinearGradientColorStops();
+//     if (colorStops) {
+//       const ctx = getDummyContext();
 
-      const start = this.fillLinearGradientStartPoint();
-      const end = this.fillLinearGradientEndPoint();
-      const grd = ctx.createLinearGradient(start.x, start.y, end.x, end.y);
+//       const start = this.fillLinearGradientStartPoint();
+//       const end = this.fillLinearGradientEndPoint();
+//       const grd = ctx.createLinearGradient(start.x, start.y, end.x, end.y);
 
-      // build color stops
-      for (let n = 0; n < colorStops.length; n += 2) {
-        grd.addColorStop(colorStops[n] as number, colorStops[n + 1] as string);
-      }
-      return grd;
-    }
-  }
+//       // build color stops
+//       for (let n = 0; n < colorStops.length; n += 2) {
+//         grd.addColorStop(colorStops[n] as number, colorStops[n + 1] as string);
+//       }
+//       return grd;
+//     }
+//   }
 
-  _getRadialGradient() {
-    return this._getCache(radialGradient, this.__getRadialGradient);
-  }
-  __getRadialGradient() {
-    const colorStops = this.fillRadialGradientColorStops();
-    if (colorStops) {
-      const ctx = getDummyContext();
+//   _getRadialGradient() {
+//     return this._getCache(radialGradient, this.__getRadialGradient);
+//   }
+//   __getRadialGradient() {
+//     const colorStops = this.fillRadialGradientColorStops();
+//     if (colorStops) {
+//       const ctx: PIXI
 
-      const start = this.fillRadialGradientStartPoint();
-      const end = this.fillRadialGradientEndPoint();
-      const grd = ctx.createRadialGradient(
-        start.x,
-        start.y,
-        this.fillRadialGradientStartRadius(),
-        end.x,
-        end.y,
-        this.fillRadialGradientEndRadius()
-      );
+//       const start = this.fillRadialGradientStartPoint();
+//       const end = this.fillRadialGradientEndPoint();
+//       const grd = ctx.createRadialGradient(
+//         start.x,
+//         start.y,
+//         this.fillRadialGradientStartRadius(),
+//         end.x,
+//         end.y,
+//         this.fillRadialGradientEndRadius()
+//       );
 
-      // build color stops
-      for (let n = 0; n < colorStops.length; n += 2) {
-        grd.addColorStop(colorStops[n] as number, colorStops[n + 1] as string);
-      }
-      return grd;
-    }
-  }
-  getShadowRGBA() {
-    return this._getCache(SHADOW_RGBA, this._getShadowRGBA);
-  }
-  _getShadowRGBA() {
-    if (!this.hasShadow()) {
-      return;
-    }
-    const rgba = Util.colorToRGBA(this.shadowColor());
-    if (rgba) {
-      return (
-        'rgba(' +
-        rgba.r +
-        ',' +
-        rgba.g +
-        ',' +
-        rgba.b +
-        ',' +
-        rgba.a * (this.shadowOpacity() || 1) +
-        ')'
-      );
-    }
-  }
+//       // build color stops
+//       for (let n = 0; n < colorStops.length; n += 2) {
+//         grd.addColorStop(colorStops[n] as number, colorStops[n + 1] as string);
+//       }
+//       return grd;
+//     }
+//   }
+//   getShadowRGBA() {
+//     return this._getCache(SHADOW_RGBA, this._getShadowRGBA);
+//   }
+//   _getShadowRGBA() {
+//     if (!this.hasShadow()) {
+//       return;
+//     }
+//     const rgba = Util.colorToRGBA(this.shadowColor());
+//     if (rgba) {
+//       return (
+//         'rgba(' +
+//         rgba.r +
+//         ',' +
+//         rgba.g +
+//         ',' +
+//         rgba.b +
+//         ',' +
+//         rgba.a * (this.shadowOpacity() || 1) +
+//         ')'
+//       );
+//     }
+//   }
   /**
    * returns whether or not the shape will be filled
    * @method
@@ -424,47 +319,6 @@ export class Shape<
     //   // this.getStrokeRadialGradientColorStops()
     // );
   }
-  hasHitStroke() {
-    const width = this.hitStrokeWidth();
-
-    // on auto just check by stroke
-    if (width === 'auto') {
-      return this.hasStroke();
-    }
-
-    // we should enable hit stroke if stroke is enabled
-    // and we have some value from width
-    return this.strokeEnabled() && !!width;
-  }
-  /**
-   * determines if point is in the shape, regardless if other shapes are on top of it.  Note: because
-   *  this method clears a temporary canvas and then redraws the shape, it performs very poorly if executed many times
-   *  consecutively.  Please use the {@link Konva.Stage#getIntersection} method if at all possible
-   *  because it performs much better
-   * @method
-   * @name Konva.Shape#intersects
-   * @param {Object} point
-   * @param {Number} point.x
-   * @param {Number} point.y
-   * @returns {Boolean}
-   */
-  intersects(point: Vector2d) {
-    const stage = this.getStage();
-    if (!stage) {
-      return false;
-    }
-    const bufferHitCanvas = stage.bufferHitCanvas;
-
-    bufferHitCanvas.getContext().clear();
-    this.drawHit(bufferHitCanvas, undefined, true);
-    const p = bufferHitCanvas.context.getImageData(
-      Math.round(point.x),
-      Math.round(point.y),
-      1,
-      1
-    ).data;
-    return p[3] > 0;
-  }
 
   destroy() {
     Node.prototype.destroy.call(this);
@@ -472,51 +326,7 @@ export class Shape<
     delete (this as any).colorKey;
     return this;
   }
-  // why do we need buffer canvas?
-  // it give better result when a shape has
-  // stroke with fill and with some opacity
-  _useBufferCanvas(forceFill?: boolean): boolean {
-    // image and sprite still has "fill" as image
-    // so they use that method with forced fill
-    // it probably will be simpler, then copy/paste the code
 
-    // force skip buffer canvas
-    const perfectDrawEnabled = this.attrs.perfectDrawEnabled ?? true;
-    if (!perfectDrawEnabled) {
-      return false;
-    }
-    const hasFill = forceFill || this.hasFill();
-    const hasStroke = this.hasStroke();
-    const isTransparent = this.getAbsoluteOpacity() !== 1;
-
-    if (hasFill && hasStroke && isTransparent) {
-      return true;
-    }
-
-    const hasShadow = this.hasShadow();
-    const strokeForShadow = this.shadowForStrokeEnabled();
-    if (hasFill && hasStroke && hasShadow && strokeForShadow) {
-      return true;
-    }
-    return false;
-  }
-  setStrokeHitEnabled(val: number) {
-    Util.warn(
-      'strokeHitEnabled property is deprecated. Please use hitStrokeWidth instead.'
-    );
-    if (val) {
-      this.hitStrokeWidth('auto');
-    } else {
-      this.hitStrokeWidth(0);
-    }
-  }
-  getStrokeHitEnabled() {
-    if (this.hitStrokeWidth() === 0) {
-      return false;
-    } else {
-      return true;
-    }
-  }
   /**
    * return self rectangle (x, y, width, height) of shape.
    * This method are not taken into account transformation and styles.
@@ -564,7 +374,7 @@ export class Shape<
     const fillAndStrokeWidth = fillRect.width + strokeWidth;
     const fillAndStrokeHeight = fillRect.height + strokeWidth;
 
-    const applyShadow = !config.skipShadow && this.hasShadow();
+    const applyShadow = !config.skipShadow && false; // this.hasShadow();
     const shadowOffsetX = applyShadow ? this.shadowOffsetX() : 0;
     const shadowOffsetY = applyShadow ? this.shadowOffsetY() : 0;
 
@@ -593,195 +403,6 @@ export class Shape<
     }
     return rect;
   }
-  drawScene(can?: SceneCanvas, top?: Node, bufferCanvas?: SceneCanvas) {
-    // basically there are 3 drawing modes
-    // 1 - simple drawing when nothing is cached.
-    // 2 - when we are caching current
-    // 3 - when node is cached and we need to draw it into layer
-
-    const layer = this.getLayer();
-    const canvas = can || layer!.getCanvas(),
-      context = canvas.getContext() as SceneContext,
-      cachedCanvas = this._getCanvasCache(),
-      drawFunc = this.getSceneFunc(),
-      hasShadow = this.hasShadow();
-    let stage;
-
-    const skipBuffer = false;
-    const cachingSelf = top === this;
-
-    if (!this.isVisible() && !cachingSelf) {
-      return this;
-    }
-    // if node is cached we just need to draw from cache
-    if (cachedCanvas) {
-      context.save();
-
-      const m = this.getAbsoluteTransform(top).getMatrix();
-      context.transform(m[0], m[1], m[2], m[3], m[4], m[5]);
-      this._drawCachedSceneCanvas(context);
-      context.restore();
-      return this;
-    }
-
-    if (!drawFunc) {
-      return this;
-    }
-
-    context.save();
-    // if buffer canvas is needed
-    if (this._useBufferCanvas() && !skipBuffer) {
-      stage = this.getStage();
-      const bc = bufferCanvas || stage.bufferCanvas;
-      const bufferContext = bc.getContext();
-      bufferContext.clear();
-      bufferContext.save();
-      bufferContext._applyLineJoin(this);
-      // layer might be undefined if we are using cache before adding to layer
-      const o = this.getAbsoluteTransform(top).getMatrix();
-      bufferContext.transform(o[0], o[1], o[2], o[3], o[4], o[5]);
-
-      drawFunc.call(this, bufferContext, this);
-      bufferContext.restore();
-
-      const ratio = bc.pixelRatio;
-
-      if (hasShadow) {
-        context._applyShadow(this);
-      }
-      context._applyOpacity(this);
-      context._applyGlobalCompositeOperation(this);
-      context.drawImage(
-        bc._canvas,
-        bc.x || 0,
-        bc.y || 0,
-        bc.width / ratio,
-        bc.height / ratio
-      );
-    } else {
-      context._applyLineJoin(this);
-
-      if (!cachingSelf) {
-        const o = this.getAbsoluteTransform(top).getMatrix();
-        context.transform(o[0], o[1], o[2], o[3], o[4], o[5]);
-        context._applyOpacity(this);
-        context._applyGlobalCompositeOperation(this);
-      }
-
-      if (hasShadow) {
-        context._applyShadow(this);
-      }
-
-      drawFunc.call(this, context, this);
-    }
-    context.restore();
-    return this;
-  }
-  drawHit(can?: HitCanvas, top?: Node, skipDragCheck = false) {
-    if (!this.shouldDrawHit(top, skipDragCheck)) {
-      return this;
-    }
-
-    const layer = this.getLayer(),
-      canvas = can || layer!.hitCanvas,
-      context = canvas && canvas.getContext(),
-      drawFunc = this.hitFunc() || this.sceneFunc(),
-      cachedCanvas = this._getCanvasCache(),
-      cachedHitCanvas = cachedCanvas && cachedCanvas.hit;
-
-    if (!this.colorKey) {
-      Util.warn(
-        'Looks like your canvas has a destroyed shape in it. Do not reuse shape after you destroyed it. If you want to reuse shape you should call remove() instead of destroy()'
-      );
-    }
-
-    if (cachedHitCanvas) {
-      context.save();
-
-      const m = this.getAbsoluteTransform(top).getMatrix();
-      context.transform(m[0], m[1], m[2], m[3], m[4], m[5]);
-
-      this._drawCachedHitCanvas(context);
-      context.restore();
-      return this;
-    }
-    if (!drawFunc) {
-      return this;
-    }
-    context.save();
-    context._applyLineJoin(this);
-
-    const selfCache = this === top;
-    if (!selfCache) {
-      const o = this.getAbsoluteTransform(top).getMatrix();
-      context.transform(o[0], o[1], o[2], o[3], o[4], o[5]);
-    }
-    drawFunc.call(this, context, this);
-    context.restore();
-    return this;
-  }
-  /**
-   * draw hit graph using the cached scene canvas
-   * @method
-   * @name Konva.Shape#drawHitFromCache
-   * @param {Integer} alphaThreshold alpha channel threshold that determines whether or not
-   *  a pixel should be drawn onto the hit graph.  Must be a value between 0 and 255.
-   *  The default is 0
-   * @returns {Konva.Shape}
-   * @example
-   * shape.cache();
-   * shape.drawHitFromCache();
-   */
-  drawHitFromCache(alphaThreshold = 0) {
-    const cachedCanvas = this._getCanvasCache(),
-      sceneCanvas = this._getCachedSceneCanvas(),
-      hitCanvas = cachedCanvas.hit,
-      hitContext = hitCanvas.getContext(),
-      hitWidth = hitCanvas.getWidth(),
-      hitHeight = hitCanvas.getHeight();
-
-    hitContext.clear();
-    hitContext.drawImage(sceneCanvas._canvas, 0, 0, hitWidth, hitHeight);
-
-    try {
-      const hitImageData = hitContext.getImageData(0, 0, hitWidth, hitHeight);
-      const hitData = hitImageData.data;
-      const len = hitData.length;
-      const rgbColorKey = Util._hexToRgb(this.colorKey);
-
-      // replace non transparent pixels with color key
-      for (let i = 0; i < len; i += 4) {
-        const alpha = hitData[i + 3];
-        if (alpha > alphaThreshold) {
-          hitData[i] = rgbColorKey.r;
-          hitData[i + 1] = rgbColorKey.g;
-          hitData[i + 2] = rgbColorKey.b;
-          hitData[i + 3] = 255;
-        } else {
-          hitData[i + 3] = 0;
-        }
-      }
-      hitContext.putImageData(hitImageData, 0, 0);
-    } catch (e: any) {
-      Util.error(
-        'Unable to draw hit graph from cached scene canvas. ' + e.message
-      );
-    }
-
-    return this;
-  }
-
-  hasPointerCapture(pointerId: number): boolean {
-    return PointerEvents.hasPointerCapture(pointerId, this);
-  }
-
-  setPointerCapture(pointerId: number) {
-    PointerEvents.setPointerCapture(pointerId, this);
-  }
-
-  releaseCapture(pointerId: number) {
-    PointerEvents.releaseCapture(pointerId, this);
-  }
 
   draggable: GetSet<boolean, this>;
   embossBlend: GetSet<boolean, this>;
@@ -789,7 +410,7 @@ export class Shape<
   dash: GetSet<number[], this>;
   dashEnabled: GetSet<boolean, this>;
   dashOffset: GetSet<number, this>;
-  fill: GetSet<string | CanvasGradient, this>;
+  fill: GetSet<string, this>;
   fillEnabled: GetSet<boolean, this>;
   fillLinearGradientColorStops: GetSet<Array<number | string>, this>;
   fillLinearGradientStartPoint: GetSet<Vector2d, this>;
@@ -825,11 +446,9 @@ export class Shape<
   fillPatternX: GetSet<number, this>;
   fillPatternY: GetSet<number, this>;
   fillPriority: GetSet<string, this>;
-  hitFunc: GetSet<ShapeConfigHandler<this>, this>;
   lineCap: GetSet<LineCap, this>;
   lineJoin: GetSet<LineJoin, this>;
   perfectDrawEnabled: GetSet<boolean, this>;
-  sceneFunc: GetSet<ShapeConfigHandler<this>, this>;
   shadowColor: GetSet<string, this>;
   shadowEnabled: GetSet<boolean, this>;
   shadowForStrokeEnabled: GetSet<boolean, this>;
@@ -838,7 +457,7 @@ export class Shape<
   shadowOffsetY: GetSet<number, this>;
   shadowOpacity: GetSet<number, this>;
   shadowBlur: GetSet<number, this>;
-  stroke: GetSet<string | CanvasGradient, this>;
+  stroke: GetSet<string, this>;
   strokeEnabled: GetSet<boolean, this>;
   fillAfterStrokeEnabled: GetSet<boolean, this>;
   strokeScaleEnabled: GetSet<boolean, this>;
@@ -855,45 +474,11 @@ export class Shape<
   fillRule: GetSet<CanvasFillRule, this>;
 }
 
-Shape.prototype._fillFunc = _fillFunc;
-Shape.prototype._strokeFunc = _strokeFunc;
-Shape.prototype._fillFuncHit = _fillFuncHit;
-Shape.prototype._strokeFuncHit = _strokeFuncHit;
-
 Shape.prototype._centroid = false;
 Shape.prototype.nodeType = 'Shape';
 _registerNode(Shape);
 
 Shape.prototype.eventListeners = {};
-Shape.prototype.on.call(
-  Shape.prototype,
-  'shadowColorChange.konva shadowBlurChange.konva shadowOffsetChange.konva shadowOpacityChange.konva shadowEnabledChange.konva',
-  _clearHasShadowCache
-);
-
-Shape.prototype.on.call(
-  Shape.prototype,
-  'shadowColorChange.konva shadowOpacityChange.konva shadowEnabledChange.konva',
-  _clearGetShadowRGBACache
-);
-
-Shape.prototype.on.call(
-  Shape.prototype,
-  'fillPriorityChange.konva fillPatternImageChange.konva fillPatternRepeatChange.konva fillPatternScaleXChange.konva fillPatternScaleYChange.konva fillPatternOffsetXChange.konva fillPatternOffsetYChange.konva fillPatternXChange.konva fillPatternYChange.konva fillPatternRotationChange.konva',
-  _clearFillPatternCache
-);
-
-Shape.prototype.on.call(
-  Shape.prototype,
-  'fillPriorityChange.konva fillLinearGradientColorStopsChange.konva fillLinearGradientStartPointXChange.konva fillLinearGradientStartPointYChange.konva fillLinearGradientEndPointXChange.konva fillLinearGradientEndPointYChange.konva',
-  _clearLinearGradientCache
-);
-
-Shape.prototype.on.call(
-  Shape.prototype,
-  'fillPriorityChange.konva fillRadialGradientColorStopsChange.konva fillRadialGradientStartPointXChange.konva fillRadialGradientStartPointYChange.konva fillRadialGradientEndPointXChange.konva fillRadialGradientEndPointYChange.konva fillRadialGradientStartRadiusChange.konva fillRadialGradientEndRadiusChange.konva',
-  _clearRadialGradientCache
-);
 
 // add getters and setters
 Factory.addGetterSetter(
@@ -1070,45 +655,6 @@ Factory.addGetterSetter(Shape, 'lineJoin');
 
 Factory.addGetterSetter(Shape, 'lineCap');
 
-/**
- * get/set line cap.  Can be butt, round, or square
- * @name Konva.Shape#lineCap
- * @method
- * @param {String} lineCap
- * @returns {String}
- * @example
- * // get line cap
- * var lineCap = shape.lineCap();
- *
- * // set line cap
- * shape.lineCap('round');
- */
-
-Factory.addGetterSetter(Shape, 'sceneFunc');
-
-/**
- * get/set scene draw function. That function is used to draw the shape on a canvas.
- * Also that function will be used to draw hit area of the shape, in case if hitFunc is not defined.
- * @name Konva.Shape#sceneFunc
- * @method
- * @param {Function} drawFunc drawing function
- * @returns {Function}
- * @example
- * // get scene draw function
- * var sceneFunc = shape.sceneFunc();
- *
- * // set scene draw function
- * shape.sceneFunc(function(context, shape) {
- *   context.beginPath();
- *   context.rect(0, 0, shape.width(), shape.height());
- *   context.closePath();
- *   // important Konva method that fill and stroke shape from its properties
- *   // like stroke and fill
- *   context.fillStrokeShape(shape);
- * });
- */
-
-Factory.addGetterSetter(Shape, 'hitFunc');
 
 /**
  * get/set hit draw function. That function is used to draw custom hit area of a shape.

@@ -1,6 +1,6 @@
 import { Konva } from './Global';
-import { Context } from './Context';
 import { IRect, RGB, Vector2d } from './types';
+import * as PIXI from "pixi.js";
 
 /*
  * Last updated November 2011
@@ -504,14 +504,6 @@ export const Util = {
       });
     }
   },
-  createCanvasElement() {
-    const canvas = document.createElement('canvas');
-    // on some environments canvas.style is readonly
-    try {
-      (<any>canvas).style = canvas.style || {};
-    } catch (e) {}
-    return canvas;
-  },
   createImageElement() {
     return document.createElement('img');
   },
@@ -989,100 +981,100 @@ export const Util = {
       c.height = 0;
     });
   },
-  drawRoundedRectPath(
-    context: Context,
-    width: number,
-    height: number,
-    cornerRadius: number | number[]
-  ) {
-    let topLeft = 0;
-    let topRight = 0;
-    let bottomLeft = 0;
-    let bottomRight = 0;
-    if (typeof cornerRadius === 'number') {
-      topLeft =
-        topRight =
-        bottomLeft =
-        bottomRight =
-          Math.min(cornerRadius, width / 2, height / 2);
-    } else {
-      topLeft = Math.min(cornerRadius[0] || 0, width / 2, height / 2);
-      topRight = Math.min(cornerRadius[1] || 0, width / 2, height / 2);
-      bottomRight = Math.min(cornerRadius[2] || 0, width / 2, height / 2);
-      bottomLeft = Math.min(cornerRadius[3] || 0, width / 2, height / 2);
-    }
-    context.moveTo(topLeft, 0);
-    context.lineTo(width - topRight, 0);
-    context.arc(
-      width - topRight,
-      topRight,
-      topRight,
-      (Math.PI * 3) / 2,
-      0,
-      false
+ drawRoundedRectPath(
+  g: PIXI.Graphics,
+  width: number,
+  height: number,
+  cornerRadius: number | number[]
+) {
+  let topLeft = 0, topRight = 0, bottomRight = 0, bottomLeft = 0;
+
+  if (typeof cornerRadius === "number") {
+    topLeft = topRight = bottomRight = bottomLeft = Math.min(
+      cornerRadius,
+      width / 2,
+      height / 2
     );
-    context.lineTo(width, height - bottomRight);
-    context.arc(
-      width - bottomRight,
-      height - bottomRight,
-      bottomRight,
-      0,
-      Math.PI / 2,
-      false
-    );
-    context.lineTo(bottomLeft, height);
-    context.arc(
-      bottomLeft,
-      height - bottomLeft,
-      bottomLeft,
-      Math.PI / 2,
-      Math.PI,
-      false
-    );
-    context.lineTo(0, topLeft);
-    context.arc(topLeft, topLeft, topLeft, Math.PI, (Math.PI * 3) / 2, false);
-  },
+  } else {
+    topLeft = Math.min(cornerRadius[0] || 0, width / 2, height / 2);
+    topRight = Math.min(cornerRadius[1] || 0, width / 2, height / 2);
+    bottomRight = Math.min(cornerRadius[2] || 0, width / 2, height / 2);
+    bottomLeft = Math.min(cornerRadius[3] || 0, width / 2, height / 2);
+  }
+
+  g.moveTo(topLeft, 0);
+  g.lineTo(width - topRight, 0);
+  g.arc(width - topRight, topRight, topRight, -Math.PI / 2, 0); // top-right
+  g.lineTo(width, height - bottomRight);
+  g.arc(width - bottomRight, height - bottomRight, bottomRight, 0, Math.PI / 2); // bottom-right
+  g.lineTo(bottomLeft, height);
+  g.arc(bottomLeft, height - bottomLeft, bottomLeft, Math.PI / 2, Math.PI); // bottom-left
+  g.lineTo(0, topLeft);
+  g.arc(topLeft, topLeft, topLeft, Math.PI, (3 * Math.PI) / 2); // top-left
+  g.closePath();
+
+  return [topLeft, topRight, bottomRight, bottomLeft];
+},
   drawRoundedPolygonPath(
-    context: Context, 
+    g: PIXI.Graphics,
     points: Vector2d[],
     sides: number,
     radius: number,
     cornerRadius: number | number[]
-  ) {
-    radius = Math.abs(radius);
-    for (let i = 0; i < sides; i++) {
-      const prev = points[(i - 1 + sides) % sides];
-      const curr = points[i];
-      const next = points[(i + 1) % sides];
-      const vec1 = {x: curr.x - prev.x, y: curr.y - prev.y};
-      const vec2 = {x: next.x - curr.x, y: next.y - curr.y};
-      const len1 = Math.hypot(vec1.x, vec1.y);
-      const len2 = Math.hypot(vec2.x, vec2.y);
-      let currCornerRadius;
-      if (typeof cornerRadius === 'number') {
-        currCornerRadius = cornerRadius;
-      } else {
-        currCornerRadius = i < cornerRadius.length ? cornerRadius[i] : 0;
-      }
-      const maxCornerRadius = radius * Math.cos(Math.PI / sides);
-      // cornerRadius creates perfect circle at 1/2 radius
-      currCornerRadius = maxCornerRadius * Math.min(1, (currCornerRadius / radius) * 2);
-      const normalVec1 = {x: vec1.x / len1, y: vec1.y / len1};
-      const normalVec2 = {x: vec2.x / len2, y: vec2.y / len2};
-      const p1 = {
-        x: curr.x - normalVec1.x * currCornerRadius,
-        y: curr.y - normalVec1.y * currCornerRadius,
-      };
-      const p2 = {
-        x: curr.x + normalVec2.x * currCornerRadius,
-        y: curr.y + normalVec2.y * currCornerRadius,
-      };
-      if (i === 0) {
-        context.moveTo(p1.x, p1.y);
-      } else {
-        context.lineTo(p1.x, p1.y);
-      }
-      context.arcTo(curr.x, curr.y, p2.x, p2.y, currCornerRadius);
+) {
+  radius = Math.abs(radius);
+
+  for (let i = 0; i < sides; i++) {
+    const prev = points[(i - 1 + sides) % sides];
+    const curr = points[i];
+    const next = points[(i + 1) % sides];
+
+    const vec1 = { x: curr.x - prev.x, y: curr.y - prev.y };
+    const vec2 = { x: next.x - curr.x, y: next.y - curr.y };
+
+    const len1 = Math.hypot(vec1.x, vec1.y);
+    const len2 = Math.hypot(vec2.x, vec2.y);
+
+    let currCornerRadius =
+      typeof cornerRadius === "number"
+        ? cornerRadius
+        : i < cornerRadius.length
+        ? cornerRadius[i]
+        : 0;
+
+    const maxCornerRadius = radius * Math.cos(Math.PI / sides);
+    currCornerRadius =
+      maxCornerRadius * Math.min(1, (currCornerRadius / radius) * 2);
+
+    const normalVec1 = { x: vec1.x / len1, y: vec1.y / len1 };
+    const normalVec2 = { x: vec2.x / len2, y: vec2.y / len2 };
+
+    const p1 = {
+      x: curr.x - normalVec1.x * currCornerRadius,
+      y: curr.y - normalVec1.y * currCornerRadius,
+    };
+    const p2 = {
+      x: curr.x + normalVec2.x * currCornerRadius,
+      y: curr.y + normalVec2.y * currCornerRadius,
+    };
+
+    if (i === 0) {
+      g.moveTo(p1.x, p1.y);
+    } else {
+      g.lineTo(p1.x, p1.y);
     }
+
+    // Arc approximation of arcTo
+    g.arc(
+      curr.x,
+      curr.y,
+      currCornerRadius,
+      Math.atan2(p1.y - curr.y, p1.x - curr.x),
+      Math.atan2(p2.y - curr.y, p2.x - curr.x),
+      false
+    );
   }
+
+  g.closePath();
+}
 };

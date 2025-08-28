@@ -108,6 +108,7 @@ export const Factory = {
       this._setAttr(attr, val);
 
       if (after) {
+        
         after.call(this);
       }
 

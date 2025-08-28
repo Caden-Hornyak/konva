@@ -1,7 +1,7 @@
 import { Factory } from '../Factory';
-import { _registerNode } from '../Global';
+import { _registerNode, Konva } from '../Global';
 import { Shape, ShapeConfig } from '../Shape';
-
+import * as PIXI from "pixi.js";
 import {
   getCubicArcLength,
   getQuadraticArcLength,
@@ -33,6 +33,7 @@ export interface PathConfig extends ShapeConfig {
  * });
  */
 export class Path extends Shape<PathConfig> {
+  _object: PIXI.Graphics;
   dataArray: PathSegment[] = [];
   pathLength = 0;
 
@@ -43,34 +44,30 @@ export class Path extends Shape<PathConfig> {
     this.on('dataChange.konva', function () {
       this._readDataAttribute();
     });
-  }
 
-  _readDataAttribute() {
-    this.dataArray = Path.parsePathData(this.data());
-    this.pathLength = Path.getPathLength(this.dataArray);
-  }
-
-  _sceneFunc(context) {
     const ca = this.dataArray;
 
+    const graphics = new PIXI.Graphics();
+    this._object = graphics;
+    
     // context position
-    context.beginPath();
+    graphics.beginPath();
     let isClosed = false;
     for (let n = 0; n < ca.length; n++) {
       const c = ca[n].command;
       const p = ca[n].points;
       switch (c) {
         case 'L':
-          context.lineTo(p[0], p[1]);
+          graphics.lineTo(p[0], p[1]);
           break;
         case 'M':
-          context.moveTo(p[0], p[1]);
+          graphics.moveTo(p[0], p[1]);
           break;
         case 'C':
-          context.bezierCurveTo(p[0], p[1], p[2], p[3], p[4], p[5]);
+          graphics.bezierCurveTo(p[0], p[1], p[2], p[3], p[4], p[5]);
           break;
         case 'Q':
-          context.quadraticCurveTo(p[0], p[1], p[2], p[3]);
+          graphics.quadraticCurveTo(p[0], p[1], p[2], p[3]);
           break;
         case 'A':
           const cx = p[0],
@@ -86,28 +83,44 @@ export class Path extends Shape<PathConfig> {
           const scaleX = rx > ry ? 1 : rx / ry;
           const scaleY = rx > ry ? ry / rx : 1;
 
-          context.translate(cx, cy);
-          context.rotate(psi);
-          context.scale(scaleX, scaleY);
-          context.arc(0, 0, r, theta, theta + dTheta, 1 - fs);
-          context.scale(1 / scaleX, 1 / scaleY);
-          context.rotate(-psi);
-          context.translate(-cx, -cy);
+          graphics.position.set(graphics.position.x+cx, graphics.position.y+cy);
+          graphics.rotation = psi;
+          graphics.scale.set(scaleX, scaleY);
+          graphics.arc(0, 0, r, theta, theta + dTheta, fs === 0);
+          graphics.scale.set(1/scaleX, 1/scaleY);
+          graphics.rotation = 0;
+          graphics.position.set(graphics.position.x-cx, graphics.position.y-cy);
+          graphics.position.set(0, 0);
 
           break;
         case 'z':
           isClosed = true;
-          context.closePath();
+          graphics.closePath();
           break;
       }
     }
 
     if (!isClosed && !this.hasFill()) {
-      context.strokeShape(this);
+      graphics
+        .fill(this.fill() ?? 0xffffff)
+        .setStrokeStyle({
+          width: this.strokeWidth() ?? 0, 
+          color: this.stroke() ?? 0x000000
+        });
     } else {
-      context.fillStrokeShape(this);
+      graphics
+        .setStrokeStyle({
+          width: this.strokeWidth() ?? 0, 
+          color: this.stroke() ?? 0x000000
+        });
     }
   }
+
+  _readDataAttribute() {
+    this.dataArray = Path.parsePathData(this.data());
+    this.pathLength = Path.getPathLength(this.dataArray);
+  }
+
   getSelfRect() {
     let points: Array<number> = [];
     this.dataArray.forEach(function (data) {

@@ -1,10 +1,9 @@
-import { HitCanvas, SceneCanvas } from './Canvas';
-import { SceneContext } from './Context';
 import { Factory } from './Factory';
 import { Node, NodeConfig } from './Node';
 import { Shape } from './Shape';
 import { GetSet, IRect } from './types';
 import { getNumberValidator } from './Validators';
+import * as PIXI from "pixi.js";
 
 export type ClipFuncOutput =
   | void
@@ -12,7 +11,6 @@ export type ClipFuncOutput =
   | [Path2D, CanvasFillRule];
 export interface ContainerConfig extends NodeConfig {
   clearBeforeDraw?: boolean;
-  clipFunc?: (ctx: SceneContext) => ClipFuncOutput;
   clipX?: number;
   clipY?: number;
   clipWidth?: number;
@@ -79,8 +77,6 @@ export abstract class Container<
       child.remove();
     });
     this.children = [];
-    // because all children were detached from parent, request draw via container
-    this._requestDraw();
     return this;
   }
   /**
@@ -96,8 +92,6 @@ export abstract class Container<
       child.destroy();
     });
     this.children = [];
-    // because all children were detached from parent, request draw via container
-    this._requestDraw();
     return this;
   }
   abstract _validateAdd(node: Node): void;
@@ -124,19 +118,12 @@ export abstract class Container<
       return this;
     }
     const child = children[0];
-    if (child.getParent()) {
-      child.moveTo(this);
+    if (child && child.parent) {
+      child.parent._object.removeChild(child._object);
       return this;
     }
-    this._validateAdd(child);
-    child.index = this.getChildren().length;
-    child.parent = this;
-    child._clearCaches();
-    this.getChildren().push(child);
-    this._fire('add', {
-      child: child,
-    });
-    this._requestDraw();
+
+    this._object.addChild(child._object);
     // chainable
     return this;
   }
@@ -292,144 +279,12 @@ export abstract class Container<
     });
     return node as this;
   }
-  /**
-   * get all shapes that intersect a point.  Note: because this method must clear a temporary
-   * canvas and redraw every shape inside the container, it should only be used for special situations
-   * because it performs very poorly.  Please use the {@link Konva.Stage#getIntersection} method if at all possible
-   * because it performs much better
-   * nodes with listening set to false will not be detected
-   * @method
-   * @name Konva.Container#getAllIntersections
-   * @param {Object} pos
-   * @param {Number} pos.x
-   * @param {Number} pos.y
-   * @returns {Array} array of shapes
-   */
-  getAllIntersections(pos) {
-    const arr: Shape[] = [];
 
-    this.find<Shape>('Shape').forEach((shape) => {
-      if (shape.isVisible() && shape.intersects(pos)) {
-        arr.push(shape);
-      }
-    });
-
-    return arr;
-  }
-  _clearSelfAndDescendantCache(attr?: string) {
-    super._clearSelfAndDescendantCache(attr);
-    // skip clearing if node is cached with canvas
-    // for performance reasons !!!
-    if (this.isCached()) {
-      return;
-    }
-    this.children?.forEach(function (node) {
-      node._clearSelfAndDescendantCache(attr);
-    });
-  }
   _setChildrenIndices() {
     this.children?.forEach(function (child, n) {
       child.index = n;
     });
-    this._requestDraw();
   }
-  drawScene(can?: SceneCanvas, top?: Node, bufferCanvas?: SceneCanvas) {
-    const layer = this.getLayer()!,
-      canvas = can || (layer && layer.getCanvas()),
-      context = canvas && canvas.getContext(),
-      cachedCanvas = this._getCanvasCache(),
-      cachedSceneCanvas = cachedCanvas && cachedCanvas.scene;
-
-    const caching = canvas && canvas.isCache;
-    if (!this.isVisible() && !caching) {
-      return this;
-    }
-
-    if (cachedSceneCanvas) {
-      context.save();
-      const m = this.getAbsoluteTransform(top).getMatrix();
-      context.transform(m[0], m[1], m[2], m[3], m[4], m[5]);
-      this._drawCachedSceneCanvas(context);
-      context.restore();
-    } else {
-      this._drawChildren('drawScene', canvas, top, bufferCanvas);
-    }
-    return this;
-  }
-  drawHit(can?: HitCanvas, top?: Node) {
-    if (!this.shouldDrawHit(top)) {
-      return this;
-    }
-
-    const layer = this.getLayer()!,
-      canvas = can || (layer && layer.hitCanvas),
-      context = canvas && canvas.getContext(),
-      cachedCanvas = this._getCanvasCache(),
-      cachedHitCanvas = cachedCanvas && cachedCanvas.hit;
-
-    if (cachedHitCanvas) {
-      context.save();
-      const m = this.getAbsoluteTransform(top).getMatrix();
-      context.transform(m[0], m[1], m[2], m[3], m[4], m[5]);
-      this._drawCachedHitCanvas(context);
-      context.restore();
-    } else {
-      this._drawChildren('drawHit', canvas, top);
-    }
-    return this;
-  }
-  _drawChildren(drawMethod, canvas, top, bufferCanvas?) {
-    const context = canvas && canvas.getContext(),
-      clipWidth = this.clipWidth(),
-      clipHeight = this.clipHeight(),
-      clipFunc = this.clipFunc(),
-      hasClip =
-        (typeof clipWidth === 'number' && typeof clipHeight === 'number') ||
-        clipFunc;
-
-    const selfCache = top === this;
-
-    if (hasClip) {
-      context.save();
-      const transform = this.getAbsoluteTransform(top);
-      let m = transform.getMatrix();
-      context.transform(m[0], m[1], m[2], m[3], m[4], m[5]);
-      context.beginPath();
-      let clipArgs;
-      if (clipFunc) {
-        clipArgs = clipFunc.call(this, context, this);
-      } else {
-        const clipX = this.clipX();
-        const clipY = this.clipY();
-        context.rect(clipX || 0, clipY || 0, clipWidth, clipHeight);
-      }
-      context.clip.apply(context, clipArgs);
-      m = transform.copy().invert().getMatrix();
-      context.transform(m[0], m[1], m[2], m[3], m[4], m[5]);
-    }
-
-    const hasComposition =
-      !selfCache &&
-      this.globalCompositeOperation() !== 'source-over' &&
-      drawMethod === 'drawScene';
-
-    if (hasComposition) {
-      context.save();
-      context._applyGlobalCompositeOperation(this);
-    }
-
-    this.children?.forEach(function (child) {
-      child[drawMethod](canvas, top, bufferCanvas);
-    });
-    if (hasComposition) {
-      context.restore();
-    }
-
-    if (hasClip) {
-      context.restore();
-    }
-  }
-
   getClientRect(
     config: {
       skipTransform?: boolean;

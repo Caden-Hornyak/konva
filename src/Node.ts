@@ -1,7 +1,4 @@
-import { Canvas, HitCanvas, SceneCanvas } from './Canvas';
 import { Container } from './Container';
-import { Context } from './Context';
-import { DD } from './DragAndDrop';
 import { Factory } from './Factory';
 import { Konva } from './Global';
 import { Layer } from './Layer';
@@ -14,6 +11,7 @@ import {
   getNumberValidator,
   getStringValidator,
 } from './Validators';
+import * as PIXI from "pixi.js";
 
 export type Filter = (this: Node, imageData: ImageData) => void;
 
@@ -158,6 +156,7 @@ export abstract class Node<Config extends NodeConfig = NodeConfig> {
   _attrsAffectingSize!: string[];
   _batchingTransformChange = false;
   _needClearTransformCache = false;
+  _object: PIXI.Graphics | PIXI.NineSlicePlane | PIXI.Text | PIXI.Sprite | PIXI.Container;
 
   _filterUpToDate = false;
   _isUnderCache = false;
@@ -179,291 +178,6 @@ export abstract class Node<Config extends NodeConfig = NodeConfig> {
   hasChildren() {
     return false;
   }
-
-  _clearCache(attr?: string) {
-    // if we want to clear transform cache
-    // we don't really need to remove it from the cache
-    // but instead mark as "dirty"
-    // so we don't need to create a new instance next time
-    if (
-      (attr === TRANSFORM || attr === ABSOLUTE_TRANSFORM) &&
-      this._cache.get(attr)
-    ) {
-      (this._cache.get(attr) as Transform).dirty = true;
-    } else if (attr) {
-      this._cache.delete(attr);
-    } else {
-      this._cache.clear();
-    }
-  }
-  _getCache(attr: string, privateGetter: Function) {
-    let cache = this._cache.get(attr);
-
-    // for transform the cache can be NOT empty
-    // but we still need to recalculate it if it is dirty
-    const isTransform = attr === TRANSFORM || attr === ABSOLUTE_TRANSFORM;
-    const invalid =
-      cache === undefined || (isTransform && cache.dirty === true);
-
-    // if not cached, we need to set it using the private getter method.
-    if (invalid) {
-      cache = privateGetter.call(this);
-      this._cache.set(attr, cache);
-    }
-
-    return cache;
-  }
-
-  _calculate(name: string, deps: Array<string>, getter: Function) {
-    // if we are trying to calculate function for the first time
-    // we need to attach listeners for change events
-    if (!this._attachedDepsListeners.get(name)) {
-      const depsString = deps.map((dep) => dep + 'Change.konva').join(SPACE);
-      this.on(depsString, () => {
-        this._clearCache(name);
-      });
-      this._attachedDepsListeners.set(name, true);
-    }
-    // just use cache function
-    return this._getCache(name, getter);
-  }
-
-  _getCanvasCache() {
-    return this._cache.get(CANVAS);
-  }
-  /*
-   * when the logic for a cached result depends on ancestor propagation, use this
-   * method to clear self and children cache
-   */
-  _clearSelfAndDescendantCache(attr?: string) {
-    this._clearCache(attr);
-    // trigger clear cache, so transformer can use it
-    if (attr === ABSOLUTE_TRANSFORM) {
-      this.fire('absoluteTransformChange');
-    }
-  }
-  /**
-   * clear cached canvas
-   * @method
-   * @name Konva.Node#clearCache
-   * @returns {Konva.Node}
-   * @example
-   * node.clearCache();
-   */
-  clearCache() {
-    if (this._cache.has(CANVAS)) {
-      const { scene, filter, hit, buffer } = this._cache.get(CANVAS);
-      Util.releaseCanvas(scene, filter, hit, buffer);
-      this._cache.delete(CANVAS);
-    }
-
-    this._clearSelfAndDescendantCache();
-    this._requestDraw();
-    return this;
-  }
-  /**
-   *  cache node to improve drawing performance, apply filters, or create more accurate
-   *  hit regions. For all basic shapes size of cache canvas will be automatically detected.
-   *  If you need to cache your custom `Konva.Shape` instance you have to pass shape's bounding box
-   *  properties. Look at [https://konvajs.org/docs/performance/Shape_Caching.html](https://konvajs.org/docs/performance/Shape_Caching.html) for more information.
-   * @method
-   * @name Konva.Node#cache
-   * @param {Object} [config]
-   * @param {Number} [config.x]
-   * @param {Number} [config.y]
-   * @param {Number} [config.width]
-   * @param {Number} [config.height]
-   * @param {Number} [config.offset]  increase canvas size by `offset` pixel in all directions.
-   * @param {Boolean} [config.drawBorder] when set to true, a red border will be drawn around the cached
-   *  region for debugging purposes
-   * @param {Number} [config.pixelRatio] change quality (or pixel ratio) of cached image. pixelRatio = 2 will produce 2x sized cache.
-   * @param {Boolean} [config.imageSmoothingEnabled] control imageSmoothingEnabled property of created canvas for cache
-   * @param {Number} [config.hitCanvasPixelRatio] change quality (or pixel ratio) of cached hit canvas.
-   * @returns {Konva.Node}
-   * @example
-   * // cache a shape with the x,y position of the bounding box at the center and
-   * // the width and height of the bounding box equal to the width and height of
-   * // the shape obtained from shape.width() and shape.height()
-   * image.cache();
-   *
-   * // cache a node and define the bounding box position and size
-   * node.cache({
-   *   x: -30,
-   *   y: -30,
-   *   width: 100,
-   *   height: 200
-   * });
-   *
-   * // cache a node and draw a red border around the bounding box
-   * // for debugging purposes
-   * node.cache({
-   *   x: -30,
-   *   y: -30,
-   *   width: 100,
-   *   height: 200,
-   *   offset : 10,
-   *   drawBorder: true
-   * });
-   */
-  cache(config?: {
-    x?: number;
-    y?: number;
-    width?: number;
-    height?: number;
-    drawBorder?: boolean;
-    offset?: number;
-    pixelRatio?: number;
-    imageSmoothingEnabled?: boolean;
-    hitCanvasPixelRatio?: number;
-  }) {
-    const conf = config || {};
-    let rect = {} as IRect;
-
-    // don't call getClientRect if we have all attributes
-    // it means call it only if have one undefined
-    if (
-      conf.x === undefined ||
-      conf.y === undefined ||
-      conf.width === undefined ||
-      conf.height === undefined
-    ) {
-      rect = this.getClientRect({
-        skipTransform: true,
-        relativeTo: this.getParent() || undefined,
-      });
-    }
-    let width = Math.ceil(conf.width || rect.width),
-      height = Math.ceil(conf.height || rect.height),
-      pixelRatio = conf.pixelRatio,
-      x = conf.x === undefined ? Math.floor(rect.x) : conf.x,
-      y = conf.y === undefined ? Math.floor(rect.y) : conf.y,
-      offset = conf.offset || 0,
-      drawBorder = conf.drawBorder || false,
-      hitCanvasPixelRatio = conf.hitCanvasPixelRatio || 1;
-
-    if (!width || !height) {
-      Util.error(
-        'Can not cache the node. Width or height of the node equals 0. Caching is skipped.'
-      );
-      return;
-    }
-
-    // because using Math.floor on x, y position may shift drawing
-    // to avoid shift we need to increase size
-    // but we better to avoid it, for better filters flows
-    const extraPaddingX = Math.abs(Math.round(rect.x) - x) > 0.5 ? 1 : 0;
-    const extraPaddingY = Math.abs(Math.round(rect.y) - y) > 0.5 ? 1 : 0;
-    width += offset * 2 + extraPaddingX;
-    height += offset * 2 + extraPaddingY;
-
-    x -= offset;
-    y -= offset;
-
-    // if (Math.floor(x) < x) {
-    //   x = Math.floor(x);
-    //   // width += 1;
-    // }
-    // if (Math.floor(y) < y) {
-    //   y = Math.floor(y);
-    //   // height += 1;
-    // }
-
-    // console.log({ x, y, width, height }, rect);
-
-    const cachedSceneCanvas = new SceneCanvas({
-        pixelRatio: pixelRatio,
-        width: width,
-        height: height,
-      }),
-      cachedFilterCanvas = new SceneCanvas({
-        pixelRatio: pixelRatio,
-        width: 0,
-        height: 0,
-        willReadFrequently: true,
-      }),
-      cachedHitCanvas = new HitCanvas({
-        pixelRatio: hitCanvasPixelRatio,
-        width: width,
-        height: height,
-      }),
-      sceneContext = cachedSceneCanvas.getContext(),
-      hitContext = cachedHitCanvas.getContext();
-
-    const bufferCanvas = new SceneCanvas({
-        // width and height already multiplied by pixelRatio
-        // so we need to revert that
-        // also increase size by x nd y offset to make sure content fits canvas
-        width:
-          cachedSceneCanvas.width / cachedSceneCanvas.pixelRatio + Math.abs(x),
-        height:
-          cachedSceneCanvas.height / cachedSceneCanvas.pixelRatio + Math.abs(y),
-        pixelRatio: cachedSceneCanvas.pixelRatio,
-      }),
-      bufferContext = bufferCanvas.getContext();
-
-    cachedHitCanvas.isCache = true;
-    cachedSceneCanvas.isCache = true;
-
-    this._cache.delete(CANVAS);
-    this._filterUpToDate = false;
-
-    if (conf.imageSmoothingEnabled === false) {
-      cachedSceneCanvas.getContext()._context.imageSmoothingEnabled = false;
-      cachedFilterCanvas.getContext()._context.imageSmoothingEnabled = false;
-    }
-
-    sceneContext.save();
-    hitContext.save();
-    bufferContext.save();
-
-    sceneContext.translate(-x, -y);
-    hitContext.translate(-x, -y);
-    bufferContext.translate(-x, -y);
-    // hard-code offset to make sure content fits canvas
-    // @ts-ignore
-    bufferCanvas.x = x;
-    // @ts-ignore
-    bufferCanvas.y = y;
-
-    // extra flag to skip on getAbsolute opacity calc
-    this._isUnderCache = true;
-    this._clearSelfAndDescendantCache(ABSOLUTE_OPACITY);
-    this._clearSelfAndDescendantCache(ABSOLUTE_SCALE);
-
-    this.drawScene(cachedSceneCanvas, this, bufferCanvas);
-    this.drawHit(cachedHitCanvas, this);
-    this._isUnderCache = false;
-
-    sceneContext.restore();
-    hitContext.restore();
-
-    // this will draw a red border around the cached box for
-    // debugging purposes
-    if (drawBorder) {
-      sceneContext.save();
-      sceneContext.beginPath();
-      sceneContext.rect(0, 0, width, height);
-      sceneContext.closePath();
-      sceneContext.setAttr('strokeStyle', 'red');
-      sceneContext.setAttr('lineWidth', 5);
-      sceneContext.stroke();
-      sceneContext.restore();
-    }
-
-    this._cache.set(CANVAS, {
-      scene: cachedSceneCanvas,
-      filter: cachedFilterCanvas,
-      hit: cachedHitCanvas,
-      buffer: bufferCanvas,
-      x: x,
-      y: y,
-    });
-
-    this._requestDraw();
-
-    return this;
-  }
-
   /**
    * determine if node is currently cached
    * @method
@@ -474,8 +188,6 @@ export abstract class Node<Config extends NodeConfig = NodeConfig> {
     return this._cache.has(CANVAS);
   }
 
-  abstract drawScene(canvas?: Canvas, top?: Node, bufferCanvas?: Canvas): void;
-  abstract drawHit(canvas?: Canvas, top?: Node): void;
   /**
    * Return client rectangle {x, y, width, height} of node. This rectangle also include all styling (strokes, shadows, etc).
    * The purpose of the method is similar to getBoundingClientRect API of the DOM.
@@ -552,106 +264,7 @@ export abstract class Node<Config extends NodeConfig = NodeConfig> {
       height: maxY - minY,
     };
   }
-  _drawCachedSceneCanvas(context: Context) {
-    context.save();
-    context._applyOpacity(this);
-    context._applyGlobalCompositeOperation(this);
 
-    const canvasCache = this._getCanvasCache();
-    context.translate(canvasCache.x, canvasCache.y);
-
-    const cacheCanvas = this._getCachedSceneCanvas();
-    const ratio = cacheCanvas.pixelRatio;
-
-    context.drawImage(
-      cacheCanvas._canvas,
-      0,
-      0,
-      cacheCanvas.width / ratio,
-      cacheCanvas.height / ratio
-    );
-    context.restore();
-  }
-  _drawCachedHitCanvas(context: Context) {
-    const canvasCache = this._getCanvasCache(),
-      hitCanvas = canvasCache.hit;
-    context.save();
-    context.translate(canvasCache.x, canvasCache.y);
-    context.drawImage(
-      hitCanvas._canvas,
-      0,
-      0,
-      hitCanvas.width / hitCanvas.pixelRatio,
-      hitCanvas.height / hitCanvas.pixelRatio
-    );
-    context.restore();
-  }
-  _getCachedSceneCanvas() {
-    let filters = this.filters(),
-      cachedCanvas = this._getCanvasCache(),
-      sceneCanvas = cachedCanvas.scene,
-      filterCanvas = cachedCanvas.filter,
-      filterContext = filterCanvas.getContext(),
-      len,
-      imageData,
-      n,
-      filter;
-
-    if (filters) {
-      if (!this._filterUpToDate) {
-        const ratio = sceneCanvas.pixelRatio;
-        filterCanvas.setSize(
-          sceneCanvas.width / sceneCanvas.pixelRatio,
-          sceneCanvas.height / sceneCanvas.pixelRatio
-        );
-        try {
-          len = filters.length;
-          filterContext.clear();
-
-          // copy cached canvas onto filter context
-          filterContext.drawImage(
-            sceneCanvas._canvas,
-            0,
-            0,
-            sceneCanvas.getWidth() / ratio,
-            sceneCanvas.getHeight() / ratio
-          );
-          imageData = filterContext.getImageData(
-            0,
-            0,
-            filterCanvas.getWidth(),
-            filterCanvas.getHeight()
-          );
-
-          // apply filters to filter context
-          for (n = 0; n < len; n++) {
-            filter = filters[n];
-            if (typeof filter !== 'function') {
-              Util.error(
-                'Filter should be type of function, but got ' +
-                  typeof filter +
-                  ' instead. Please check correct filters'
-              );
-              continue;
-            }
-            filter.call(this, imageData);
-            filterContext.putImageData(imageData, 0, 0);
-          }
-        } catch (e: any) {
-          Util.error(
-            'Unable to apply filter. ' +
-              e.message +
-              ' This post my help you https://konvajs.org/docs/posts/Tainted_Canvas.html.'
-          );
-        }
-
-        this._filterUpToDate = true;
-      }
-
-      return filterCanvas;
-    }
-    return sceneCanvas;
-  }
   /**
    * bind events to the node. KonvaJS supports mouseover, mousemove,
    *  mouseout, mouseenter, mouseleave, mousedown, mouseup, wheel, contextmenu, click, dblclick, touchstart, touchmove,
@@ -804,16 +417,6 @@ export abstract class Node<Config extends NodeConfig = NodeConfig> {
     }
     return this;
   }
-  // some event aliases for third party integration like HammerJS
-  dispatchEvent(evt: any) {
-    const e = {
-      target: this,
-      type: evt.type,
-      evt: evt,
-    };
-    this.fire(evt.type, e);
-    return this;
-  }
   addEventListener(type: string, handler: (e: Event) => void) {
     // we have to pass native event to handler
     this.on(type, function (evt) {
@@ -846,27 +449,13 @@ export abstract class Node<Config extends NodeConfig = NodeConfig> {
    * node.remove();
    */
   remove() {
-    if (this.isDragging()) {
-      this.stopDrag();
-    }
-    // we can have drag element but that is not dragged yet
-    // so just clear it
-    DD._dragElements.delete(this._id);
     this._remove();
     return this;
   }
-  _clearCaches() {
-    this._clearSelfAndDescendantCache(ABSOLUTE_TRANSFORM);
-    this._clearSelfAndDescendantCache(ABSOLUTE_OPACITY);
-    this._clearSelfAndDescendantCache(ABSOLUTE_SCALE);
-    this._clearSelfAndDescendantCache(STAGE);
-    this._clearSelfAndDescendantCache(VISIBLE);
-    this._clearSelfAndDescendantCache(LISTENING);
-  }
+
   _remove() {
     // every cached attr that is calculated via node tree
     // traversal must be cleared when removing a node
-    this._clearCaches();
 
     const parent = this.getParent();
 
@@ -886,7 +475,6 @@ export abstract class Node<Config extends NodeConfig = NodeConfig> {
    */
   destroy() {
     this.remove();
-    this.clearCache();
     return this;
   }
   /**
@@ -966,192 +554,20 @@ export abstract class Node<Config extends NodeConfig = NodeConfig> {
           // otherwise set directly
           this._setAttr(key, config[key]);
         }
+
       }
     });
 
     return this;
   }
-  /**
-   * determine if node is listening for events by taking into account ancestors.
-   *
-   * Parent    | Self      | isListening
-   * listening | listening |
-   * ----------+-----------+------------
-   * T         | T         | T
-   * T         | F         | F
-   * F         | T         | F
-   * F         | F         | F
-   *
-   * @method
-   * @name Konva.Node#isListening
-   * @returns {Boolean}
-   */
-  isListening() {
-    return this._getCache(LISTENING, this._isListening);
-  }
-  _isListening(relativeTo?: Node): boolean {
-    const listening = this.listening();
-    if (!listening) {
-      return false;
-    }
-    const parent = this.getParent();
-    if (parent && parent !== relativeTo && this !== relativeTo) {
-      return parent._isListening(relativeTo);
-    } else {
-      return true;
-    }
-  }
-  /**
-   * determine if node is visible by taking into account ancestors.
-   *
-   * Parent    | Self      | isVisible
-   * visible   | visible   |
-   * ----------+-----------+------------
-   * T         | T         | T
-   * T         | F         | F
-   * F         | T         | F
-   * F         | F         | F
-   * @method
-   * @name Konva.Node#isVisible
-   * @returns {Boolean}
-   */
-  isVisible() {
-    return this._getCache(VISIBLE, this._isVisible);
-  }
-  _isVisible(relativeTo?: Node): boolean {
-    const visible = this.visible();
-    if (!visible) {
-      return false;
-    }
-    const parent = this.getParent();
-    if (parent && parent !== relativeTo && this !== relativeTo) {
-      return parent._isVisible(relativeTo);
-    } else {
-      return true;
-    }
-  }
-  shouldDrawHit(top?: Node, skipDragCheck = false) {
-    if (top) {
-      return this._isVisible(top) && this._isListening(top);
-    }
-    const layer = this.getLayer();
 
-    let layerUnderDrag = false;
-    DD._dragElements.forEach((elem) => {
-      if (elem.dragStatus !== 'dragging') {
-        return;
-      } else if (elem.node.nodeType === 'Stage') {
-        layerUnderDrag = true;
-      } else if (elem.node.getLayer() === layer) {
-        layerUnderDrag = true;
-      }
-    });
-
-    const dragSkip =
-      !skipDragCheck &&
-      !Konva.hitOnDragEnabled &&
-      (layerUnderDrag || Konva.isTransforming());
-    return this.isListening() && this.isVisible() && !dragSkip;
-  }
-
-  /**
-   * show node. set visible = true
-   * @method
-   * @name Konva.Node#show
-   * @returns {Konva.Node}
-   */
-  show() {
-    this.visible(true);
-    return this;
-  }
-  /**
-   * hide node.  Hidden nodes are no longer detectable
-   * @method
-   * @name Konva.Node#hide
-   * @returns {Konva.Node}
-   */
-  hide() {
-    this.visible(false);
-    return this;
-  }
-  getZIndex() {
-    return this.index || 0;
-  }
-  /**
-   * get absolute z-index which takes into account sibling
-   *  and ancestor indices
-   * @method
-   * @name Konva.Node#getAbsoluteZIndex
-   * @returns {Integer}
-   */
-  getAbsoluteZIndex() {
-    let depth = this.getDepth(),
-      that = this,
-      index = 0,
-      nodes,
-      len,
-      n,
-      child;
-
-    function addChildren(children) {
-      nodes = [];
-      len = children.length;
-      for (n = 0; n < len; n++) {
-        child = children[n];
-        index++;
-
-        if (child.nodeType !== SHAPE) {
-          nodes = nodes.concat(child.getChildren().slice());
-        }
-
-        if (child._id === that._id) {
-          n = len;
-        }
-      }
-
-      if (nodes.length > 0 && nodes[0].getDepth() <= depth) {
-        addChildren(nodes);
-      }
-    }
-    const stage = this.getStage();
-    if (that.nodeType !== UPPER_STAGE && stage) {
-      addChildren(stage.getChildren());
-    }
-
-    return index;
-  }
-  /**
-   * get node depth in node tree.  Returns an integer.
-   *  e.g. Stage depth will always be 0.  Layers will always be 1.  Groups and Shapes will always
-   *  be >= 2
-   * @method
-   * @name Konva.Node#getDepth
-   * @returns {Integer}
-   */
-  getDepth() {
-    let depth = 0,
-      parent = this.parent;
-
-    while (parent) {
-      depth++;
-      parent = parent.parent;
-    }
-    return depth;
-  }
 
   // sometimes we do several attributes changes
   // like node.position(pos)
   // for performance reasons, lets batch transform reset
   // so it work faster
   _batchTransformChanges(func) {
-    this._batchingTransformChange = true;
     func();
-    this._batchingTransformChange = false;
-    if (this._needClearTransformCache) {
-      this._clearCache(TRANSFORM);
-      this._clearSelfAndDescendantCache(ABSOLUTE_TRANSFORM);
-    }
-    this._needClearTransformCache = false;
   }
 
   setPosition(pos: Vector2d) {
@@ -1242,8 +658,6 @@ export abstract class Node<Config extends NodeConfig = NodeConfig> {
     this.attrs.x = x;
     this.attrs.y = y;
 
-    // important, use non cached value
-    this._clearCache(TRANSFORM);
     const it = this._getAbsoluteTransform().copy();
 
     it.invert();
@@ -1254,8 +668,6 @@ export abstract class Node<Config extends NodeConfig = NodeConfig> {
     };
     this._setTransform(origTrans);
     this.setPosition({ x: pos.x, y: pos.y });
-    this._clearCache(TRANSFORM);
-    this._clearSelfAndDescendantCache(ABSOLUTE_TRANSFORM);
 
     return this;
   }
@@ -1466,23 +878,6 @@ export abstract class Node<Config extends NodeConfig = NodeConfig> {
     return this;
   }
   /**
-   * get absolute opacity
-   * @method
-   * @name Konva.Node#getAbsoluteOpacity
-   * @returns {Number}
-   */
-  getAbsoluteOpacity() {
-    return this._getCache(ABSOLUTE_OPACITY, this._getAbsoluteOpacity);
-  }
-  _getAbsoluteOpacity() {
-    let absOpacity = this.opacity();
-    const parent = this.getParent();
-    if (parent && !parent._isUnderCache) {
-      absOpacity *= parent.getAbsoluteOpacity();
-    }
-    return absOpacity;
-  }
-  /**
    * move node to another container
    * @method
    * @name Konva.Node#moveTo
@@ -1678,7 +1073,7 @@ export abstract class Node<Config extends NodeConfig = NodeConfig> {
    * @returns {Konva.Stage}
    */
   getStage(): Stage | null {
-    return this._getCache(STAGE, this._getStage);
+    return this._getStage();
   }
 
   _getStage() {
@@ -1689,41 +1084,7 @@ export abstract class Node<Config extends NodeConfig = NodeConfig> {
       return null;
     }
   }
-  /**
-   * fire event
-   * @method
-   * @name Konva.Node#fire
-   * @param {String} eventType event type.  can be a regular event, like click, mouseover, or mouseout, or it can be a custom event, like myCustomEvent
-   * @param {Event} [evt] event object
-   * @param {Boolean} [bubble] setting the value to false, or leaving it undefined, will result in the event
-   *  not bubbling.  Setting the value to true will result in the event bubbling.
-   * @returns {Konva.Node}
-   * @example
-   * // manually fire click event
-   * node.fire('click');
-   *
-   * // fire custom event
-   * node.fire('foo');
-   *
-   * // fire custom event with custom event object
-   * node.fire('foo', {
-   *   bar: 10
-   * });
-   *
-   * // fire click event that bubbles
-   * node.fire('click', null, true);
-   */
-  fire(eventType: string, evt: any = {}, bubble?: boolean) {
-    evt.target = evt.target || this;
-    // bubble
-    if (bubble) {
-      this._fireAndBubble(eventType, evt);
-    } else {
-      // no bubble
-      this._fire(eventType, evt);
-    }
-    return this;
-  }
+
   /**
    * get absolute transform of the node which takes into
    *  account its ancestor transforms
@@ -1737,10 +1098,7 @@ export abstract class Node<Config extends NodeConfig = NodeConfig> {
       return this._getAbsoluteTransform(top);
     } else {
       // if no argument, we can cache the result
-      return this._getCache(
-        ABSOLUTE_TRANSFORM,
-        this._getAbsoluteTransform
-      ) as Transform;
+      return this._getAbsoluteTransform()
     }
   }
   _getAbsoluteTransform(top?: Node) {
@@ -1842,7 +1200,7 @@ export abstract class Node<Config extends NodeConfig = NodeConfig> {
    * @returns {Konva.Transform}
    */
   getTransform() {
-    return this._getCache(TRANSFORM, this._getTransform) as Transform;
+    return this._getTransform();
   }
   _getTransform(): Transform {
     const m: Transform = this._cache.get(TRANSFORM) || new Transform();
@@ -1933,214 +1291,6 @@ export abstract class Node<Config extends NodeConfig = NodeConfig> {
     }
     return node;
   }
-  _toKonvaCanvas(config) {
-    config = config || {};
-
-    const box = this.getClientRect();
-
-    const stage = this.getStage(),
-      x = config.x !== undefined ? config.x : Math.floor(box.x),
-      y = config.y !== undefined ? config.y : Math.floor(box.y),
-      pixelRatio = config.pixelRatio || 1,
-      canvas = new SceneCanvas({
-        width:
-          config.width || Math.ceil(box.width) || (stage ? stage.width() : 0),
-        height:
-          config.height ||
-          Math.ceil(box.height) ||
-          (stage ? stage.height() : 0),
-        pixelRatio: pixelRatio,
-      }),
-      context = canvas.getContext();
-
-    const bufferCanvas = new SceneCanvas({
-      // width and height already multiplied by pixelRatio
-      // so we need to revert that
-      // also increase size by x nd y offset to make sure content fits canvas
-      width: canvas.width / canvas.pixelRatio + Math.abs(x),
-      height: canvas.height / canvas.pixelRatio + Math.abs(y),
-      pixelRatio: canvas.pixelRatio,
-    });
-
-    if (config.imageSmoothingEnabled === false) {
-      context._context.imageSmoothingEnabled = false;
-    }
-    context.save();
-
-    if (x || y) {
-      context.translate(-1 * x, -1 * y);
-    }
-
-    this.drawScene(canvas, undefined, bufferCanvas);
-    context.restore();
-
-    return canvas;
-  }
-  /**
-   * converts node into an canvas element.
-   * @method
-   * @name Konva.Node#toCanvas
-   * @param {Object} config
-   * @param {Function} config.callback function executed when the composite has completed
-   * @param {Number} [config.x] x position of canvas section
-   * @param {Number} [config.y] y position of canvas section
-   * @param {Number} [config.width] width of canvas section
-   * @param {Number} [config.height] height of canvas section
-   * @param {Number} [config.pixelRatio] pixelRatio of output canvas. Default is 1.
-   * You can use that property to increase quality of the image, for example for super hight quality exports
-   * or usage on retina (or similar) displays. pixelRatio will be used to multiply the size of exported image.
-   * If you export to 500x500 size with pixelRatio = 2, then produced image will have size 1000x1000.
-   * @param {Boolean} [config.imageSmoothingEnabled] set this to false if you want to disable imageSmoothing
-   * @example
-   * var canvas = node.toCanvas();
-   */
-  toCanvas(config?) {
-    return this._toKonvaCanvas(config)._canvas;
-  }
-  /**
-   * Creates a composite data URL (base64 string). If MIME type is not
-   * specified, then "image/png" will result. For "image/jpeg", specify a quality
-   * level as quality (range 0.0 - 1.0)
-   * @method
-   * @name Konva.Node#toDataURL
-   * @param {Object} config
-   * @param {String} [config.mimeType] can be "image/png" or "image/jpeg".
-   *  "image/png" is the default
-   * @param {Number} [config.x] x position of canvas section
-   * @param {Number} [config.y] y position of canvas section
-   * @param {Number} [config.width] width of canvas section
-   * @param {Number} [config.height] height of canvas section
-   * @param {Number} [config.quality] jpeg quality.  If using an "image/jpeg" mimeType,
-   *  you can specify the quality from 0 to 1, where 0 is very poor quality and 1
-   *  is very high quality
-   * @param {Number} [config.pixelRatio] pixelRatio of output image url. Default is 1.
-   * You can use that property to increase quality of the image, for example for super hight quality exports
-   * or usage on retina (or similar) displays. pixelRatio will be used to multiply the size of exported image.
-   * If you export to 500x500 size with pixelRatio = 2, then produced image will have size 1000x1000.
-   * @param {Boolean} [config.imageSmoothingEnabled] set this to false if you want to disable imageSmoothing
-   * @returns {String}
-   */
-  toDataURL(config?: {
-    x?: number;
-    y?: number;
-    width?: number;
-    height?: number;
-    pixelRatio?: number;
-    mimeType?: string;
-    quality?: number;
-    callback?: (str: string) => void;
-  }) {
-    config = config || {};
-    const mimeType = config.mimeType || null,
-      quality = config.quality || null;
-    const url = this._toKonvaCanvas(config).toDataURL(mimeType, quality);
-    if (config.callback) {
-      config.callback(url);
-    }
-    return url;
-  }
-  /**
-   * converts node into an image.  Since the toImage
-   *  method is asynchronous, the resulting image can only be retrieved from the config callback
-   *  or the returned Promise.  toImage is most commonly used
-   *  to cache complex drawings as an image so that they don't have to constantly be redrawn
-   * @method
-   * @name Konva.Node#toImage
-   * @param {Object} config
-   * @param {Function} [config.callback] function executed when the composite has completed
-   * @param {String} [config.mimeType] can be "image/png" or "image/jpeg".
-   *  "image/png" is the default
-   * @param {Number} [config.x] x position of canvas section
-   * @param {Number} [config.y] y position of canvas section
-   * @param {Number} [config.width] width of canvas section
-   * @param {Number} [config.height] height of canvas section
-   * @param {Number} [config.quality] jpeg quality.  If using an "image/jpeg" mimeType,
-   *  you can specify the quality from 0 to 1, where 0 is very poor quality and 1
-   *  is very high quality
-   * @param {Number} [config.pixelRatio] pixelRatio of output image. Default is 1.
-   * You can use that property to increase quality of the image, for example for super hight quality exports
-   * or usage on retina (or similar) displays. pixelRatio will be used to multiply the size of exported image.
-   * If you export to 500x500 size with pixelRatio = 2, then produced image will have size 1000x1000.
-   * @param {Boolean} [config.imageSmoothingEnabled] set this to false if you want to disable imageSmoothing
-   * @return {Promise<Image>}
-   * @example
-   * var image = node.toImage({
-   *   callback(img) {
-   *     // do stuff with img
-   *   }
-   * });
-   */
-  toImage(config?: {
-    x?: number;
-    y?: number;
-    width?: number;
-    height?: number;
-    pixelRatio?: number;
-    mimeType?: string;
-    quality?: number;
-    callback?: (img: HTMLImageElement) => void;
-  }) {
-    return new Promise((resolve, reject) => {
-      try {
-        const callback = config?.callback;
-        if (callback) delete config.callback;
-        Util._urlToImage(this.toDataURL(config as any), function (img) {
-          resolve(img);
-          callback?.(img);
-        });
-      } catch (err) {
-        reject(err);
-      }
-    });
-  }
-  /**
-   * Converts node into a blob.  Since the toBlob method is asynchronous,
-   *  the resulting blob can only be retrieved from the config callback
-   *  or the returned Promise.
-   * @method
-   * @name Konva.Node#toBlob
-   * @param {Object} config
-   * @param {Function} [config.callback] function executed when the composite has completed
-   * @param {Number} [config.x] x position of canvas section
-   * @param {Number} [config.y] y position of canvas section
-   * @param {Number} [config.width] width of canvas section
-   * @param {Number} [config.height] height of canvas section
-   * @param {Number} [config.pixelRatio] pixelRatio of output canvas. Default is 1.
-   * You can use that property to increase quality of the image, for example for super hight quality exports
-   * or usage on retina (or similar) displays. pixelRatio will be used to multiply the size of exported image.
-   * If you export to 500x500 size with pixelRatio = 2, then produced image will have size 1000x1000.
-   * @param {Boolean} [config.imageSmoothingEnabled] set this to false if you want to disable imageSmoothing
-   * @example
-   * var blob = await node.toBlob({});
-   * @returns {Promise<Blob>}
-   */
-  toBlob(config?: {
-    x?: number;
-    y?: number;
-    width?: number;
-    height?: number;
-    pixelRatio?: number;
-    mimeType?: string;
-    quality?: number;
-    callback?: (blob: Blob | null) => void;
-  }) {
-    return new Promise((resolve, reject) => {
-      try {
-        const callback = config?.callback;
-        if (callback) delete config.callback;
-        this.toCanvas(config).toBlob(
-          (blob) => {
-            resolve(blob);
-            callback?.(blob);
-          },
-          config?.mimeType,
-          config?.quality
-        );
-      } catch (err) {
-        reject(err);
-      }
-    });
-  }
   setSize(size) {
     this.width(size.width);
     this.height(size.height);
@@ -2207,12 +1357,6 @@ export abstract class Node<Config extends NodeConfig = NodeConfig> {
         i--;
       }
     }
-  }
-  _fireChangeEvent(attr, oldVal, newVal) {
-    this._fire(attr + CHANGE, {
-      oldVal: oldVal,
-      newVal: newVal,
-    });
   }
   /**
    * add name to node
@@ -2299,12 +1443,46 @@ export abstract class Node<Config extends NodeConfig = NodeConfig> {
     }
     return this;
   }
-  _requestDraw() {
-    if (Konva.autoDrawEnabled) {
-      const drawNode = this.getLayer() || this.getStage();
-      drawNode?.batchDraw();
+
+   _getCache(attr: string, privateGetter: Function) {
+    let cache = this._cache.get(attr);
+
+    // for transform the cache can be NOT empty
+    // but we still need to recalculate it if it is dirty
+    const isTransform = attr === TRANSFORM || attr === ABSOLUTE_TRANSFORM;
+    const invalid =
+      cache === undefined || (isTransform && cache.dirty === true);
+
+    // if not cached, we need to set it using the private getter method.
+    if (invalid) {
+      cache = privateGetter.call(this);
+      this._cache.set(attr, cache);
+    }
+
+    return cache;
+  }
+   _calculate(name: string, deps: Array<string>, getter: Function) {
+    // if we are trying to calculate function for the first time
+    // we need to attach listeners for change events
+    // just use cache function
+    return this._getCache(name, getter);
+  }
+  isVisible() {
+    return this._isVisible();
+  }
+  _isVisible(relativeTo?: Node): boolean {
+    const visible = this.visible();
+    if (!visible) {
+      return false;
+    }
+    const parent = this.getParent();
+    if (parent && parent !== relativeTo && this !== relativeTo) {
+      return parent._isVisible(relativeTo);
+    } else {
+      return true;
     }
   }
+
   _setAttr(key: string, val) {
     const oldVal = this.attrs[key];
     if (oldVal === val && !Util.isObject(val)) {
@@ -2315,10 +1493,11 @@ export abstract class Node<Config extends NodeConfig = NodeConfig> {
     } else {
       this.attrs[key] = val;
     }
-    if (this._shouldFireChangeEvents) {
-      this._fireChangeEvent(key, oldVal, val);
+
+     // forgive me
+    if (this._object && this._object[key]) {
+        this._object[key] = val;
     }
-    this._requestDraw();
   }
   _setComponentAttr(key, component, val) {
     let oldVal;
@@ -2331,279 +1510,7 @@ export abstract class Node<Config extends NodeConfig = NodeConfig> {
       }
 
       this.attrs[key][component] = val;
-      this._fireChangeEvent(key, oldVal, val);
     }
-  }
-  _fireAndBubble(eventType, evt, compareShape?) {
-    if (evt && this.nodeType === SHAPE) {
-      evt.target = this;
-    }
-
-    const nonBubbling = [
-      MOUSEENTER,
-      MOUSELEAVE,
-      POINTERENTER,
-      POINTERLEAVE,
-      TOUCHENTER,
-      TOUCHLEAVE,
-    ];
-
-    const shouldStop =
-      nonBubbling.indexOf(eventType) !== -1 &&
-      ((compareShape &&
-        (this === compareShape ||
-          (this.isAncestorOf && this.isAncestorOf(compareShape)))) ||
-        (this.nodeType === 'Stage' && !compareShape));
-
-    if (!shouldStop) {
-      this._fire(eventType, evt);
-
-      // simulate event bubbling
-      const stopBubble =
-        nonBubbling.indexOf(eventType) !== -1 &&
-        compareShape &&
-        compareShape.isAncestorOf &&
-        compareShape.isAncestorOf(this) &&
-        !compareShape.isAncestorOf(this.parent);
-      if (
-        ((evt && !evt.cancelBubble) || !evt) &&
-        this.parent &&
-        this.parent.isListening() &&
-        !stopBubble
-      ) {
-        if (compareShape && compareShape.parent) {
-          this._fireAndBubble.call(this.parent, eventType, evt, compareShape);
-        } else {
-          this._fireAndBubble.call(this.parent, eventType, evt);
-        }
-      }
-    }
-  }
-
-  _getProtoListeners(eventType) {
-    const allListeners = this._cache.get(ALL_LISTENERS) ?? {};
-    let events = allListeners?.[eventType];
-    if (events === undefined) {
-      //recalculate cache
-      events = [];
-      let obj = Object.getPrototypeOf(this);
-      while (obj) {
-        const hierarchyEvents = obj.eventListeners?.[eventType] ?? [];
-        events.push(...hierarchyEvents);
-        obj = Object.getPrototypeOf(obj);
-      }
-      // update cache
-      allListeners[eventType] = events;
-      this._cache.set(ALL_LISTENERS, allListeners);
-    }
-
-    return events;
-  }
-  _fire(eventType, evt) {
-    evt = evt || {};
-    evt.currentTarget = this;
-    evt.type = eventType;
-
-    const topListeners = this._getProtoListeners(eventType);
-    if (topListeners) {
-      for (let i = 0; i < topListeners.length; i++) {
-        topListeners[i].handler.call(this, evt);
-      }
-    }
-
-    // it is important to iterate over self listeners without cache
-    // because events can be added/removed while firing
-    const selfListeners = this.eventListeners[eventType];
-    if (selfListeners) {
-      for (let i = 0; i < selfListeners.length; i++) {
-        selfListeners[i].handler.call(this, evt);
-      }
-    }
-  }
-  /**
-   * draw both scene and hit graphs.  If the node being drawn is the stage, all of the layers will be cleared and redrawn
-   * @method
-   * @name Konva.Node#draw
-   * @returns {Konva.Node}
-   */
-  draw() {
-    this.drawScene();
-    this.drawHit();
-    return this;
-  }
-
-  // drag & drop
-  _createDragElement(evt) {
-    const pointerId = evt ? evt.pointerId : undefined;
-    const stage = this.getStage();
-    const ap = this.getAbsolutePosition();
-    if (!stage) {
-      return;
-    }
-    const pos =
-      stage._getPointerById(pointerId) ||
-      stage._changedPointerPositions[0] ||
-      ap;
-    DD._dragElements.set(this._id, {
-      node: this,
-      startPointerPos: pos,
-      offset: {
-        x: pos.x - ap.x,
-        y: pos.y - ap.y,
-      },
-      dragStatus: 'ready',
-      pointerId,
-    });
-  }
-
-  /**
-   * initiate drag and drop.
-   * @method
-   * @name Konva.Node#startDrag
-   */
-  startDrag(evt?: any, bubbleEvent = true) {
-    if (!DD._dragElements.has(this._id)) {
-      this._createDragElement(evt);
-    }
-
-    const elem = DD._dragElements.get(this._id)!;
-    elem.dragStatus = 'dragging';
-    this.fire(
-      'dragstart',
-      {
-        type: 'dragstart',
-        target: this,
-        evt: evt && evt.evt,
-      },
-      bubbleEvent
-    );
-  }
-
-  _setDragPosition(evt, elem) {
-    // const pointers = this.getStage().getPointersPositions();
-    // const pos = pointers.find(p => p.id === this._dragEventId);
-    const pos = this.getStage()!._getPointerById(elem.pointerId);
-
-    if (!pos) {
-      return;
-    }
-    let newNodePos = {
-      x: pos.x - elem.offset.x,
-      y: pos.y - elem.offset.y,
-    };
-
-    const dbf = this.dragBoundFunc();
-    if (dbf !== undefined) {
-      const bounded = dbf.call(this, newNodePos, evt);
-      if (!bounded) {
-        Util.warn(
-          'dragBoundFunc did not return any value. That is unexpected behavior. You must return new absolute position from dragBoundFunc.'
-        );
-      } else {
-        newNodePos = bounded;
-      }
-    }
-
-    if (
-      !this._lastPos ||
-      this._lastPos.x !== newNodePos.x ||
-      this._lastPos.y !== newNodePos.y
-    ) {
-      this.setAbsolutePosition(newNodePos);
-      this._requestDraw();
-    }
-
-    this._lastPos = newNodePos;
-  }
-
-  /**
-   * stop drag and drop
-   * @method
-   * @name Konva.Node#stopDrag
-   */
-  stopDrag(evt?) {
-    const elem = DD._dragElements.get(this._id);
-    if (elem) {
-      elem.dragStatus = 'stopped';
-    }
-    DD._endDragBefore(evt);
-    DD._endDragAfter(evt);
-  }
-
-  setDraggable(draggable) {
-    this._setAttr('draggable', draggable);
-    this._dragChange();
-  }
-
-  /**
-   * determine if node is currently in drag and drop mode
-   * @method
-   * @name Konva.Node#isDragging
-   */
-  isDragging() {
-    const elem = DD._dragElements.get(this._id);
-    return elem ? elem.dragStatus === 'dragging' : false;
-  }
-
-  _listenDrag() {
-    this._dragCleanup();
-
-    this.on('mousedown.konva touchstart.konva', function (evt) {
-      const shouldCheckButton = evt.evt['button'] !== undefined;
-      const canDrag =
-        !shouldCheckButton || Konva.dragButtons.indexOf(evt.evt['button']) >= 0;
-      if (!canDrag) {
-        return;
-      }
-      if (this.isDragging()) {
-        return;
-      }
-
-      let hasDraggingChild = false;
-      DD._dragElements.forEach((elem) => {
-        if (this.isAncestorOf(elem.node)) {
-          hasDraggingChild = true;
-        }
-      });
-      // nested drag can be started
-      // in that case we don't need to start new drag
-      if (!hasDraggingChild) {
-        this._createDragElement(evt);
-      }
-    });
-  }
-
-  _dragChange() {
-    if (this.attrs.draggable) {
-      this._listenDrag();
-    } else {
-      // remove event listeners
-      this._dragCleanup();
-
-      /*
-       * force drag and drop to end
-       * if this node is currently in
-       * drag and drop mode
-       */
-      const stage = this.getStage();
-      if (!stage) {
-        return;
-      }
-      const dragElement = DD._dragElements.get(this._id);
-      const isDragging = dragElement && dragElement.dragStatus === 'dragging';
-      const isReady = dragElement && dragElement.dragStatus === 'ready';
-
-      if (isDragging) {
-        this.stopDrag();
-      } else if (isReady) {
-        DD._dragElements.delete(this._id);
-      }
-    }
-  }
-
-  _dragCleanup() {
-    this.off('mousedown.konva');
-    this.off('touchstart.konva');
   }
 
   /**
@@ -2769,28 +1676,6 @@ interface AnimTo extends NodeConfig {
 
 Node.prototype.nodeType = 'Node';
 Node.prototype._attrsAffectingSize = [];
-
-// attache events listeners once into prototype
-// that way we don't spend too much time on making an new instance
-Node.prototype.eventListeners = {};
-Node.prototype.on.call(Node.prototype, TRANSFORM_CHANGE_STR, function () {
-  if (this._batchingTransformChange) {
-    this._needClearTransformCache = true;
-    return;
-  }
-  this._clearCache(TRANSFORM);
-  this._clearSelfAndDescendantCache(ABSOLUTE_TRANSFORM);
-});
-
-Node.prototype.on.call(Node.prototype, 'visibleChange.konva', function () {
-  this._clearSelfAndDescendantCache(VISIBLE);
-});
-Node.prototype.on.call(Node.prototype, 'listeningChange.konva', function () {
-  this._clearSelfAndDescendantCache(LISTENING);
-});
-Node.prototype.on.call(Node.prototype, 'opacityChange.konva', function () {
-  this._clearSelfAndDescendantCache(ABSOLUTE_OPACITY);
-});
 
 const addGetterSetter = Factory.addGetterSetter;
 

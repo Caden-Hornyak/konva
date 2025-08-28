@@ -2,8 +2,7 @@ import { Factory } from '../Factory';
 import { _registerNode } from '../Global';
 import { Shape, ShapeConfig } from '../Shape';
 import { getNumberArrayValidator, getNumberValidator } from '../Validators';
-
-import { Context } from '../Context';
+import * as PIXI from "pixi.js";
 import { GetSet } from '../types';
 
 function getControlPoints(
@@ -99,17 +98,13 @@ export interface LineConfig extends ShapeConfig {
 export class Line<
   Config extends LineConfig = LineConfig
 > extends Shape<Config> {
+  _object: PIXI.Graphics
   constructor(config?: Config) {
     super(config);
-    this.on(
-      'pointsChange.konva tensionChange.konva closedChange.konva bezierChange.konva',
-      function () {
-        this._clearCache('tensionPoints');
-      }
-    );
-  }
 
-  _sceneFunc(context: Context) {
+    const graphics = new PIXI.Graphics();
+    this._object = graphics;
+
     const points = this.points(),
       length = points.length,
       tension = this.tension(),
@@ -121,8 +116,8 @@ export class Line<
     }
     let n = 0;
 
-    context.beginPath();
-    context.moveTo(points[0], points[1]);
+    graphics.beginPath();
+    graphics.moveTo(points[0], points[1]);
 
     // tension
     if (tension !== 0 && length > 4) {
@@ -131,11 +126,11 @@ export class Line<
       n = closed ? 0 : 4;
 
       if (!closed) {
-        context.quadraticCurveTo(tp[0], tp[1], tp[2], tp[3]);
+        graphics.quadraticCurveTo(tp[0], tp[1], tp[2], tp[3]);
       }
 
       while (n < len - 2) {
-        context.bezierCurveTo(
+        graphics.bezierCurveTo(
           tp[n++],
           tp[n++],
           tp[n++],
@@ -146,7 +141,7 @@ export class Line<
       }
 
       if (!closed) {
-        context.quadraticCurveTo(
+        graphics.quadraticCurveTo(
           tp[len - 2],
           tp[len - 1],
           points[length - 2],
@@ -158,7 +153,7 @@ export class Line<
       n = 2;
 
       while (n < length) {
-        context.bezierCurveTo(
+        graphics.bezierCurveTo(
           points[n++],
           points[n++],
           points[n++],
@@ -170,17 +165,26 @@ export class Line<
     } else {
       // no tension
       for (n = 2; n < length; n += 2) {
-        context.lineTo(points[n], points[n + 1]);
+        graphics.lineTo(points[n], points[n + 1]);
       }
     }
 
     // closed e.g. polygons and blobs
     if (closed) {
-      context.closePath();
-      context.fillStrokeShape(this);
+      graphics.closePath();
+      graphics
+        .fill(this.fill() ?? 0xffffff)
+        .setStrokeStyle({
+          width: this.strokeWidth() ?? 0, 
+          color: this.stroke() ?? 0x000000
+        });
     } else {
       // open e.g. lines and splines
-      context.strokeShape(this);
+      graphics
+        .setStrokeStyle({
+          width: this.strokeWidth() ?? 0, 
+          color: this.stroke() ?? 0x000000
+        });
     }
   }
   getTensionPoints() {

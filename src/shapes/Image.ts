@@ -8,7 +8,7 @@ import {
 } from '../Validators';
 
 import { GetSet, IRect } from '../types';
-import { Context } from '../Context';
+import * as PIXI from "pixi.js";
 
 export interface ImageConfig extends ShapeConfig {
   image: CanvasImageSource | undefined;
@@ -41,12 +41,10 @@ export interface ImageConfig extends ShapeConfig {
  */
 export class Image extends Shape<ImageConfig> {
   private _loadListener: () => void;
+  _object: PIXI.Sprite;
 
   constructor(attrs: ImageConfig) {
     super(attrs);
-    this._loadListener = () => {
-      this._requestDraw();
-    };
 
     this.on('imageChange.konva', (props: any) => {
       this._removeImageLoad(props.oldVal);
@@ -79,20 +77,15 @@ export class Image extends Shape<ImageConfig> {
     super.destroy();
     return this;
   }
-  _useBufferCanvas() {
-    const hasCornerRadius = !!this.cornerRadius();
-    const hasShadow = this.hasShadow();
-    if (hasCornerRadius && hasShadow) {
-      return true;
-    }
-    return super._useBufferCanvas(true);
-  }
-  _sceneFunc(context: Context) {
+
+  _sceneFunc(graphics: PIXI.Graphics) {
     const width = this.getWidth();
     const height = this.getHeight();
     const cornerRadius = this.cornerRadius();
     const image = this.attrs.image;
     let params;
+    const sprite = PIXI.Sprite.from(image);
+    this._object = sprite;
 
     if (image) {
       const cropWidth = this.attrs.cropWidth;
@@ -114,36 +107,27 @@ export class Image extends Shape<ImageConfig> {
       }
     }
 
+    sprite.x = params[1] ?? 0;
+    sprite.y = params[2] ?? 0;
+    sprite.width  = params[3] ?? sprite.texture.width;
+    sprite.height = params[4] ?? sprite.texture.height;
+
+    graphics.x = sprite.x;
+    graphics.y = sprite.y;
+
     if (this.hasFill() || this.hasStroke() || cornerRadius) {
-      context.beginPath();
       cornerRadius
-        ? Util.drawRoundedRectPath(context, width, height, cornerRadius)
-        : context.rect(0, 0, width, height);
-      context.closePath();
-      context.fillStrokeShape(this);
+        ? Util.drawRoundedRectPath(graphics, width, height, cornerRadius)
+        : graphics.rect(0, 0, width, height);
+      graphics.fill(this.fill() ?? 0xffffff)
+      .setStrokeStyle({
+        width: this.strokeWidth() ?? 0, 
+        color: this.stroke() ?? 0x000000
+      });
     }
 
-    if (image) {
-      if (cornerRadius) {
-        context.clip();
-      }
-      context.drawImage.apply(context, params);
-    }
+    sprite.mask = graphics;
     // If you need to draw later, you need to execute save/restore
-  }
-  _hitFunc(context: Context) {
-    const width = this.width(),
-      height = this.height(),
-      cornerRadius = this.cornerRadius();
-
-    context.beginPath();
-    if (!cornerRadius) {
-      context.rect(0, 0, width, height);
-    } else {
-      Util.drawRoundedRectPath(context, width, height, cornerRadius);
-    }
-    context.closePath();
-    context.fillStrokeShape(this);
   }
   getWidth() {
     return this.attrs.width ?? (this.image() as any)?.width;

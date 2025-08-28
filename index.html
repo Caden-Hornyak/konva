@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Konva Test</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/8.12.0/pixi.min.js"></script>
+    <script src="konva.js"></script>
+  
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+    }
+    #stage-container {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background-color: #eee;
+    }
+    #special-button {
+        position: fixed;
+        top: 0;
+        left: 0;
+    }
+  </style>
+</head>
+<body>
+  <div id="stage-container"></div>
+    <script>
+        Konva.enableTrace = true
+        let stage;
+        let layer;
+    const func = async () => {
+        stage = await Konva.Stage.create({ container: 'stage-container', width: 500, height: 500, x: 0, y: 0 });
+    //      stage = new Konva.Stage({
+    //     container: "stage-container", // id of container <div>
+    //     width: 500,
+    //     height: 400,
+    //   });
+        layer = new Konva.Layer();
+        
+    
+        stage.add(layer);
+    }
+
+     let rects = [];
+     const colors = ['red', 'black', 'blue', 'green', 'yellow', 'orange']
+      func().then(async () => {
+    //    let thingStage = new PIXI.Application();
+    // await thingStage.init({
+    //     width: 1,
+    //     height: 1,
+    //     backgroundColor: 0x1099bb,
+    //     antialias: true,
+    //     resolution: 1,
+    //     preference: 'webgl'
+    // });
+
+    // const containerElement = document.getElementById('stage-container');
+    // containerElement?.appendChild(thingStage.canvas);
+        stage.application.ticker.add(() => {
+        frameCount++;
+        const now = performance.now();
+        if (now - lastTime >= 1000) {
+            fps = frameCount;
+            frameCount = 0;
+            lastTime = now;
+            console.log("Pixi FPS:", fps);
+        }
+        });
+
+        for (let i = 0; i < 10000; i++) {
+            console.log(Math.random() * stage.width())
+            rects.push(new Konva.Rect({
+      x: Math.random() * stage.width(),
+      y: Math.random() * stage.height(),
+        width: 100,
+        height: 50,
+      fill: colors[Math.round(Math.random() * (colors.length-1))],
+      cornerRadius: [10, 10, 50, 50],
+    }));
+        layer.add(rects[rects.length-1]);
+     
+        }
+        }) 
+      
+    const newFunc = () => {
+        setInterval(() => {
+            for (let rect of rects) {
+            rect.x(Math.random() * stage.width()),
+            rect.y(Math.random() * stage.height())
+        }
+        }, 10)
+        
+        
+    }
+
+    let lastTime = performance.now();
+let frameCount = 0;
+let fps = 0;
+
+
+    </script>
+    <button id="special-button" onclick="newFunc()"> LCIK ME</button>
+</body>
+</html>

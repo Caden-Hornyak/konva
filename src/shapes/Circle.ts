@@ -3,7 +3,7 @@ import { Shape, ShapeConfig } from '../Shape';
 import { GetSet } from '../types';
 import { getNumberValidator } from '../Validators';
 import { _registerNode } from '../Global';
-import { Context } from '../Context';
+import * as PIXI from "pixi.js";
 
 export interface CircleConfig extends ShapeConfig {
   radius?: number;
@@ -28,12 +28,20 @@ export interface CircleConfig extends ShapeConfig {
  * });
  */
 export class Circle extends Shape<CircleConfig> {
-  _sceneFunc(context: Context) {
-    context.beginPath();
-    context.arc(0, 0, this.attrs.radius || 0, 0, Math.PI * 2, false);
-    context.closePath();
-    context.fillStrokeShape(this);
-  }
+    _object: PIXI.Graphics;
+
+    constructor(config?: CircleConfig) {
+      super(config);
+
+      this._object = new PIXI.Graphics()
+      .beginPath()
+      .fill(this.fill() ?? 0xffffff)
+      .setStrokeStyle({
+          width: this.strokeWidth() ?? 0, 
+          color: this.stroke() ?? 0x000000
+      })
+      .arc(0, 0, this.attrs.radius || 0, 0, Math.PI * 2, false);
+    }
   getWidth() {
     return this.radius() * 2;
   }
