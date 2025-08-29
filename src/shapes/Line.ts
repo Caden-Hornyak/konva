@@ -4,6 +4,7 @@ import { Shape, ShapeConfig } from '../Shape';
 import { getNumberArrayValidator, getNumberValidator } from '../Validators';
 import * as PIXI from "pixi.js";
 import { GetSet } from '../types';
+import { stages } from '../Stage';
 
 function getControlPoints(
   x0: number,
@@ -71,6 +72,8 @@ export interface LineConfig extends ShapeConfig {
   bezier?: boolean;
 }
 
+let lineTexture;
+
 /**
  * Line constructor.&nbsp; Lines are defined by an array of points and
  *  a tension
@@ -98,94 +101,121 @@ export interface LineConfig extends ShapeConfig {
 export class Line<
   Config extends LineConfig = LineConfig
 > extends Shape<Config> {
-  _object: PIXI.Graphics
+  _object: PIXI.Sprite
   constructor(config?: Config) {
     super(config);
 
-    const graphics = new PIXI.Graphics();
-    this._object = graphics;
-
-    const points = this.points(),
-      length = points.length,
-      tension = this.tension(),
-      closed = this.closed(),
-      bezier = this.bezier();
-
-    if (!length) {
-      return;
+    if (!lineTexture) {
+        const line = new PIXI.Graphics()
+        .rect(0, 0, 1, 1)
+        .fill(0xffffff);
+        const tempLineTexture = stages[0].application.renderer.generateTexture(line);
+        lineTexture = tempLineTexture;
+        line.destroy();
     }
-    let n = 0;
+    
+    const line = new PIXI.Sprite(lineTexture);
+    this._object = line;
+    this.changePoints();
+    this._object.tint = this.stroke() ?? "black";
+    this._object.height = this.strokeWidth();
+    this._object.alpha = this.opacity();
+    // const points = this.points(),
+    //   length = points.length,
+    //   tension = this.tension(),
+    //   closed = this.closed(),
+    //   bezier = this.bezier();
 
-    graphics.beginPath();
-    graphics.moveTo(points[0], points[1]);
+    // if (!length) {
+    //   return;
+    // }
+    // let n = 0;
 
-    // tension
-    if (tension !== 0 && length > 4) {
-      const tp = this.getTensionPoints();
-      const len = tp.length;
-      n = closed ? 0 : 4;
+    // graphics.beginPath();
+    // graphics.moveTo(points[0], points[1]);
 
-      if (!closed) {
-        graphics.quadraticCurveTo(tp[0], tp[1], tp[2], tp[3]);
-      }
+    // // tension
+    // if (tension !== 0 && length > 4) {
+    //   const tp = this.getTensionPoints();
+    //   const len = tp.length;
+    //   n = closed ? 0 : 4;
 
-      while (n < len - 2) {
-        graphics.bezierCurveTo(
-          tp[n++],
-          tp[n++],
-          tp[n++],
-          tp[n++],
-          tp[n++],
-          tp[n++]
-        );
-      }
+    //   if (!closed) {
+    //     graphics.quadraticCurveTo(tp[0], tp[1], tp[2], tp[3]);
+    //   }
 
-      if (!closed) {
-        graphics.quadraticCurveTo(
-          tp[len - 2],
-          tp[len - 1],
-          points[length - 2],
-          points[length - 1]
-        );
-      }
-    } else if (bezier) {
-      // no tension but bezier
-      n = 2;
+    //   while (n < len - 2) {
+    //     graphics.bezierCurveTo(
+    //       tp[n++],
+    //       tp[n++],
+    //       tp[n++],
+    //       tp[n++],
+    //       tp[n++],
+    //       tp[n++]
+    //     );
+    //   }
 
-      while (n < length) {
-        graphics.bezierCurveTo(
-          points[n++],
-          points[n++],
-          points[n++],
-          points[n++],
-          points[n++],
-          points[n++]
-        );
-      }
-    } else {
-      // no tension
-      for (n = 2; n < length; n += 2) {
-        graphics.lineTo(points[n], points[n + 1]);
-      }
-    }
+    //   if (!closed) {
+    //     graphics.quadraticCurveTo(
+    //       tp[len - 2],
+    //       tp[len - 1],
+    //       points[length - 2],
+    //       points[length - 1]
+    //     );
+    //   }
+    // } else if (bezier) {
+    //   // no tension but bezier
+    //   n = 2;
 
-    // closed e.g. polygons and blobs
-    if (closed) {
-      graphics.closePath();
-      graphics
-        .fill(this.fill() ?? 0xffffff)
-        .setStrokeStyle({
-          width: this.strokeWidth() ?? 0, 
-          color: this.stroke() ?? 0x000000
-        });
-    } else {
-      // open e.g. lines and splines
-      graphics
-        .setStrokeStyle({
-          width: this.strokeWidth() ?? 0, 
-          color: this.stroke() ?? 0x000000
-        });
-    }
+    //   while (n < length) {
+    //     graphics.bezierCurveTo(
+    //       points[n++],
+    //       points[n++],
+    //       points[n++],
+    //       points[n++],
+    //       points[n++],
+    //       points[n++]
+    //     );
+    //   }
+    // } else {
+    //   // no tension
+    //   for (n = 2; n < length; n += 2) {
+    //     graphics.lineTo(points[n], points[n + 1]);
+    //   }
+    // }
+
+    // // closed e.g. polygons and blobs
+    // if (closed) {
+    //   graphics.closePath();
+    //   graphics
+    //     .fill(this.fill() ?? 0xffffff)
+    //     .setStrokeStyle({
+    //       width: this.strokeWidth() ?? 0, 
+    //       color: this.stroke() ?? 0x000000
+    //     });
+    // } else {
+    //   // open e.g. lines and splines
+    //   graphics
+    //     .setStrokeStyle({
+    //       width: this.strokeWidth() ?? 0, 
+    //       color: this.stroke() ?? 0x000000
+    //     });
+    // }
+  }
+
+  changePoints() {
+
+    const [x1, y1, x2, y2] = this.points();
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+
+    this._object.x = x1;
+    this._object.y = y1;
+    this._object.width = Math.sqrt(dx * dx + dy * dy);
+
+    // Calculate the rotation and set it
+    this._object.rotation = Math.atan2(dy, dx);
+    
   }
   getTensionPoints() {
     return this._getCache('tensionPoints', this._getTensionPoints);
@@ -348,7 +378,9 @@ Factory.addGetterSetter(Line, 'tension', 0, getNumberValidator());
  * line.tension(3);
  */
 
-Factory.addGetterSetter(Line, 'points', [], getNumberArrayValidator());
+Factory.addGetterSetter(Line, 'points', [], getNumberArrayValidator(), function (this) {
+    if (this._object) this.changePoints();
+});
 /**
  * get/set points array. Points is a flat array [x1, y1, x2, y2]. It is flat for performance reasons.
  * @name Konva.Line#points

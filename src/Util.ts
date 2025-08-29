@@ -1013,7 +1013,6 @@ export const Util = {
   g.arc(topLeft, topLeft, topLeft, Math.PI, (3 * Math.PI) / 2); // top-left
   g.closePath();
 
-  return [topLeft, topRight, bottomRight, bottomLeft];
 },
   drawRoundedPolygonPath(
     g: PIXI.Graphics,
@@ -1023,58 +1022,40 @@ export const Util = {
     cornerRadius: number | number[]
 ) {
   radius = Math.abs(radius);
-
-  for (let i = 0; i < sides; i++) {
-    const prev = points[(i - 1 + sides) % sides];
-    const curr = points[i];
-    const next = points[(i + 1) % sides];
-
-    const vec1 = { x: curr.x - prev.x, y: curr.y - prev.y };
-    const vec2 = { x: next.x - curr.x, y: next.y - curr.y };
-
-    const len1 = Math.hypot(vec1.x, vec1.y);
-    const len2 = Math.hypot(vec2.x, vec2.y);
-
-    let currCornerRadius =
-      typeof cornerRadius === "number"
-        ? cornerRadius
-        : i < cornerRadius.length
-        ? cornerRadius[i]
-        : 0;
-
-    const maxCornerRadius = radius * Math.cos(Math.PI / sides);
-    currCornerRadius =
-      maxCornerRadius * Math.min(1, (currCornerRadius / radius) * 2);
-
-    const normalVec1 = { x: vec1.x / len1, y: vec1.y / len1 };
-    const normalVec2 = { x: vec2.x / len2, y: vec2.y / len2 };
-
-    const p1 = {
-      x: curr.x - normalVec1.x * currCornerRadius,
-      y: curr.y - normalVec1.y * currCornerRadius,
-    };
-    const p2 = {
-      x: curr.x + normalVec2.x * currCornerRadius,
-      y: curr.y + normalVec2.y * currCornerRadius,
-    };
-
-    if (i === 0) {
-      g.moveTo(p1.x, p1.y);
-    } else {
-      g.lineTo(p1.x, p1.y);
+    for (let i = 0; i < sides; i++) {
+      const prev = points[(i - 1 + sides) % sides];
+      const curr = points[i];
+      const next = points[(i + 1) % sides];
+      const vec1 = { x: curr.x - prev.x, y: curr.y - prev.y };
+      const vec2 = { x: next.x - curr.x, y: next.y - curr.y };
+      const len1 = Math.hypot(vec1.x, vec1.y);
+      const len2 = Math.hypot(vec2.x, vec2.y);
+      let currCornerRadius;
+      if (typeof cornerRadius === 'number') {
+        currCornerRadius = cornerRadius;
+      } else {
+        currCornerRadius = i < cornerRadius.length ? cornerRadius[i] : 0;
+      }
+      const maxCornerRadius = radius * Math.cos(Math.PI / sides);
+      // cornerRadius creates perfect circle at 1/2 radius
+      currCornerRadius =
+        maxCornerRadius * Math.min(1, (currCornerRadius / radius) * 2);
+      const normalVec1 = { x: vec1.x / len1, y: vec1.y / len1 };
+      const normalVec2 = { x: vec2.x / len2, y: vec2.y / len2 };
+      const p1 = {
+        x: curr.x - normalVec1.x * currCornerRadius,
+        y: curr.y - normalVec1.y * currCornerRadius,
+      };
+      const p2 = {
+        x: curr.x + normalVec2.x * currCornerRadius,
+        y: curr.y + normalVec2.y * currCornerRadius,
+      };
+      if (i === 0) {
+        g.moveTo(p1.x, p1.y);
+      } else {
+        g.lineTo(p1.x, p1.y);
+      }
+      g.arcTo(curr.x, curr.y, p2.x, p2.y, currCornerRadius);
     }
-
-    // Arc approximation of arcTo
-    g.arc(
-      curr.x,
-      curr.y,
-      currCornerRadius,
-      Math.atan2(p1.y - curr.y, p1.x - curr.x),
-      Math.atan2(p2.y - curr.y, p2.x - curr.x),
-      false
-    );
-  }
-
-  g.closePath();
 }
 };

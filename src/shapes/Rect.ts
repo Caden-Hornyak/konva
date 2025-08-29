@@ -41,35 +41,38 @@ export class Rect extends Shape<RectConfig> {
   constructor(config?: RectConfig) {
     super(config);
 
-    const graphics: PIXI.Graphics = new PIXI.Graphics();
+    
     const cornerRadius = this.cornerRadius(),
       width = this.width(),
       height = this.height(),
       x = this.x(),
       y = this.y();
 
-    graphics.beginPath();
-
-    let cornerRadiusList: number[] = [0, 0, 0, 0];
-    
-    if (!cornerRadius) {
-      graphics
-      .rect(0, 0, TEXTURE_WIDTH, TEXTURE_HEIGHT)
-      .fill(0xFFFFFF)
-      .setStrokeStyle({
-          width: this.strokeWidth() ?? 0, 
-          color: this.stroke() ?? 0x000000
-      });
-    } else {
-      cornerRadiusList = Util.drawRoundedRectPath(graphics, TEXTURE_WIDTH, TEXTURE_HEIGHT, cornerRadius);
-      graphics.fill(0xFFFFFF)
-    }
+    let cornerRadiusList: number[] = [
+        Math.min(cornerRadius[0] || 0, width / 2, height / 2),
+        Math.min(cornerRadius[1] || 0, width / 2, height / 2),
+        Math.min(cornerRadius[2] || 0, width / 2, height / 2),
+        Math.min(cornerRadius[3] || 0, width / 2, height / 2)
+    ];
 
     let texture: PIXI.Texture;
-    const textureKey = `${cornerRadiusList[0]}_${cornerRadiusList[1]}_${cornerRadiusList[2]}_${cornerRadiusList[3]}`;
+    const textureKey = `${cornerRadiusList[0]}_${cornerRadiusList[1]}_${cornerRadiusList[2]}_${cornerRadiusList[3]}_${this.strokeWidth()}_${this.stroke()}`;
     if (textureCache[textureKey]) {
       texture = textureCache[textureKey];
     } else {
+      const graphics: PIXI.Graphics = new PIXI.Graphics();
+      graphics.beginPath();
+      if (!cornerRadius) {
+        graphics.rect(0, 0, TEXTURE_WIDTH, TEXTURE_HEIGHT);
+      } else {
+        Util.drawRoundedRectPath(graphics, TEXTURE_WIDTH, TEXTURE_HEIGHT, cornerRadius);
+      }
+
+      graphics.fill(0xFFFFFF)
+        .setStrokeStyle({
+          width: this.strokeWidth(), 
+          color: this.stroke() ?? "black"
+        });
       texture = stages[0].application.renderer.generateTexture(graphics);
       textureCache[textureKey] = texture;
     }
@@ -80,7 +83,8 @@ export class Rect extends Shape<RectConfig> {
       Math.max(cornerRadiusList[1], cornerRadiusList[2]),
       Math.max(cornerRadiusList[2], cornerRadiusList[3]),
     );
-    this._object.tint = this.fill() ?? 0xFF0000;
+    this._object.tint = this.fill();
+    this._object.alpha = this.opacity();
     this._object.width = width;
     this._object.height = height
     this._object.x = x;

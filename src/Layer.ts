@@ -55,14 +55,8 @@ const HASH = '#',
  */
 
 export class Layer extends Container<Group | Shape> {
-  _object: PIXI.Container;
   _waitingForDraw = false;
 
-  constructor(config?: LayerConfig) {
-    super(config);
-    this._object = new PIXI.Container({
-    })
-  }
   getLayer() {
     return this;
   }

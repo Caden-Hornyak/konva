@@ -74,6 +74,10 @@ export interface NodeConfig {
   filters?: Array<Filter>;
 }
 
+const konvaToPIXIAttributeMap = {
+    'opacity': 'alpha'
+}
+
 // CONSTANTS
 const ABSOLUTE_OPACITY = 'absoluteOpacity',
   ALL_LISTENERS = 'allEventListeners',
@@ -156,7 +160,7 @@ export abstract class Node<Config extends NodeConfig = NodeConfig> {
   _attrsAffectingSize!: string[];
   _batchingTransformChange = false;
   _needClearTransformCache = false;
-  _object: PIXI.Graphics | PIXI.NineSlicePlane | PIXI.Text | PIXI.Sprite | PIXI.Container;
+  _object: PIXI.Graphics | PIXI.NineSlicePlane | PIXI.Text | PIXI.Sprite | PIXI.Container | PIXI.Sprite;
 
   _filterUpToDate = false;
   _isUnderCache = false;
@@ -457,13 +461,13 @@ export abstract class Node<Config extends NodeConfig = NodeConfig> {
     // every cached attr that is calculated via node tree
     // traversal must be cleared when removing a node
 
-    const parent = this.getParent();
-
-    if (parent && parent.children) {
-      parent.children.splice(this.index, 1);
-      parent._setChildrenIndices();
-      this.parent = null;
+    if (this.parent) {
+        this.parent._object.removeChild(this._object);
+        this.parent.children[this.name()] = this.parent.children[this.name()].filter((node) => node.id() === this.id());
     }
+    
+    
+    this.parent = null;
   }
   /**
    * remove and destroy a node. Kill it and delete forever! You should not reuse node after destroy().
@@ -775,108 +779,7 @@ export abstract class Node<Config extends NodeConfig = NodeConfig> {
     this.rotation(this.rotation() + theta);
     return this;
   }
-  /**
-   * move node to the top of its siblings
-   * @method
-   * @name Konva.Node#moveToTop
-   * @returns {Boolean}
-   */
-  moveToTop() {
-    if (!this.parent) {
-      Util.warn('Node has no parent. moveToTop function is ignored.');
-      return false;
-    }
-    const index = this.index,
-      len = this.parent.getChildren().length;
-    if (index < len - 1) {
-      this.parent.children.splice(index, 1);
-      this.parent.children.push(this);
-      this.parent._setChildrenIndices();
-      return true;
-    }
-    return false;
-  }
-  /**
-   * move node up
-   * @method
-   * @name Konva.Node#moveUp
-   * @returns {Boolean} flag is moved or not
-   */
-  moveUp() {
-    if (!this.parent) {
-      Util.warn('Node has no parent. moveUp function is ignored.');
-      return false;
-    }
-    const index = this.index,
-      len = this.parent.getChildren().length;
-    if (index < len - 1) {
-      this.parent.children.splice(index, 1);
-      this.parent.children.splice(index + 1, 0, this);
-      this.parent._setChildrenIndices();
-      return true;
-    }
-    return false;
-  }
-  /**
-   * move node down
-   * @method
-   * @name Konva.Node#moveDown
-   * @returns {Boolean}
-   */
-  moveDown() {
-    if (!this.parent) {
-      Util.warn('Node has no parent. moveDown function is ignored.');
-      return false;
-    }
-    const index = this.index;
-    if (index > 0) {
-      this.parent.children.splice(index, 1);
-      this.parent.children.splice(index - 1, 0, this);
-      this.parent._setChildrenIndices();
-      return true;
-    }
-    return false;
-  }
-  /**
-   * move node to the bottom of its siblings
-   * @method
-   * @name Konva.Node#moveToBottom
-   * @returns {Boolean}
-   */
-  moveToBottom() {
-    if (!this.parent) {
-      Util.warn('Node has no parent. moveToBottom function is ignored.');
-      return false;
-    }
-    const index = this.index;
-    if (index > 0) {
-      this.parent.children.splice(index, 1);
-      this.parent.children.unshift(this);
-      this.parent._setChildrenIndices();
-      return true;
-    }
-    return false;
-  }
-  setZIndex(zIndex) {
-    if (!this.parent) {
-      Util.warn('Node has no parent. zIndex parameter is ignored.');
-      return this;
-    }
-    if (zIndex < 0 || zIndex >= this.parent.children.length) {
-      Util.warn(
-        'Unexpected value ' +
-          zIndex +
-          ' for zIndex property. zIndex is just index of a node in children of its parent. Expected value is from 0 to ' +
-          (this.parent.children.length - 1) +
-          '.'
-      );
-    }
-    const index = this.index;
-    this.parent.children.splice(index, 1);
-    this.parent.children.splice(zIndex, 0, this);
-    this.parent._setChildrenIndices();
-    return this;
-  }
+
   /**
    * move node to another container
    * @method
@@ -1495,8 +1398,9 @@ export abstract class Node<Config extends NodeConfig = NodeConfig> {
     }
 
      // forgive me
-    if (this._object && this._object[key]) {
-        this._object[key] = val;
+    let cleanKey = konvaToPIXIAttributeMap[key] ?? key;
+    if (this._object && this._object[cleanKey] !== undefined) {
+        this._object[cleanKey] = val;
     }
   }
   _setComponentAttr(key, component, val) {

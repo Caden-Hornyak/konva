@@ -180,8 +180,6 @@ export class Text extends Shape<TextConfig> {
   textHeight: number;
   constructor(config?: TextConfig) {
     super(checkDefaultFill(config));
-    const textArr = this.textArr,
-      textArrLen = textArr.length;
 
     if (!this.text()) {
       return;
@@ -202,7 +200,7 @@ export class Text extends Shape<TextConfig> {
       shouldLineThrough = textDecoration.indexOf('line-through') !== -1,
       n;
 
-    const text = new PIXI.Text(this.text(), {
+    const text = new PIXI.Text({text: this.text(), style: {
       fontFamily: "Arial",
       fontSize: fontSize,
       fontWeight: "bold",
@@ -210,8 +208,12 @@ export class Text extends Shape<TextConfig> {
       align: align as PIXI.TextStyleAlign,
       lineHeight: this.lineHeight(),
       letterSpacing: letterSpacing,
-    });
+    }});
     this._object = text;
+
+    if (!this.width()) {
+        this.width(text.width);
+    }
 
     if (verticalAlign === "middle") {
       text.anchor.y = 0.5;

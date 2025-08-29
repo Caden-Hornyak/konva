@@ -159,7 +159,7 @@ export class Stage extends Container<Layer> {
   _changedPointerPositions: (Vector2d & { id: number })[] = [];
 
   constructor(config: StageConfig) {
-    super(checkNoClip(config));
+    super();
     this._checkVisibility();
     stages.push(this);
   }

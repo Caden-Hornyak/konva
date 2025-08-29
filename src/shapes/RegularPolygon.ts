@@ -5,7 +5,10 @@ import { getNumberOrArrayOfNumbersValidator, getNumberValidator } from '../Valid
 import { _registerNode } from '../Global';
 import { Util } from '../Util';
 import * as PIXI from "pixi.js";
+import { stages } from '../Stage';
 
+const textureCache: Record<string, PIXI.Texture> = {};
+const RADIUS_TEXTURE_SIZE = 64;
 export interface RegularPolygonConfig extends ShapeConfig {
   sides: number;
   radius: number;
@@ -34,40 +37,61 @@ export interface RegularPolygonConfig extends ShapeConfig {
  * });
  */
 export class RegularPolygon extends Shape<RegularPolygonConfig> {
-  _object: PIXI.Graphics;
+  _object: PIXI.Sprite;
 
   constructor(config?: RegularPolygonConfig) {
     super(config)
-    const graphics: PIXI.Graphics = new PIXI.Graphics();
-    this._object = graphics;
-
+    
     const points = this._getPoints(),
       radius = this.radius(),
       sides = this.sides(),
       cornerRadius = this.cornerRadius();
 
-    graphics.beginPath();
+    let texture: PIXI.Texture;
+    let textureKey = `${sides}_${cornerRadius}`
 
-    if (!cornerRadius) {
-      graphics.moveTo(points[0].x, points[0].y);
-      for (let n = 1; n < points.length; n++) {
-        graphics.lineTo(points[n].x, points[n].y);
-      }
+    if (textureCache[textureKey]) {
+        texture = textureCache[textureKey];
     } else {
-      Util.drawRoundedPolygonPath(graphics, points, sides, radius, cornerRadius);
+        const graphics: PIXI.Graphics = new PIXI.Graphics();
+        graphics.beginPath();
+
+        if (!cornerRadius) {
+            console.log(points)
+            graphics.moveTo(points[0].x, points[0].y);
+            for (let n = 1; n < points.length; n++) {
+                graphics.lineTo(points[n].x, points[n].y);
+            }
+        } else {
+            Util.drawRoundedPolygonPath(graphics, points, sides, RADIUS_TEXTURE_SIZE, cornerRadius);
+        }
+
+        graphics
+        .closePath()
+        .fill(0xFFFFFF)
+        .setStrokeStyle({
+            width: this.strokeWidth(), 
+            color: this.stroke() ?? "black"
+        });
+        
+        texture = stages[0].application.renderer.generateTexture(graphics);
+        textureCache[textureKey] = texture;
     }
 
-    graphics
-      .closePath()
-      .fill(this.fill() ?? 0xffffff)
-      .setStrokeStyle({
-          width: this.strokeWidth() ?? 0, 
-          color: this.stroke() ?? 0x000000
-      });
+    this._object = new PIXI.Sprite(texture);
+    this._object.tint = this.fill();
+    this._object.width = radius * 2;
+    this._object.height = radius * 2;
+    this._object.x = this.x();
+    this._object.y = this.y();
+
+    // Set the anchor to the center so the polygon scales correctly from its origin.
+    // Since the texture was created with a center at (0, 0), the anchor should be 0.5.
+    this._object.anchor.set(0.5);
   }
   _getPoints() {
     const sides = this.attrs.sides as number;
-    const radius = this.attrs.radius || 0;
+    const radius = RADIUS_TEXTURE_SIZE;
     const points: Vector2d[] = [];
     for (let n = 0; n < sides; n++) {
       points.push({
@@ -75,6 +99,7 @@ export class RegularPolygon extends Shape<RegularPolygonConfig> {
         y: -1 * radius * Math.cos((n * 2 * Math.PI) / sides),
       });
     }
+    console.log()
     return points;
   }
   getSelfRect() {

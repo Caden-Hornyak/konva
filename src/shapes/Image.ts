@@ -45,40 +45,8 @@ export class Image extends Shape<ImageConfig> {
 
   constructor(attrs: ImageConfig) {
     super(attrs);
-
-    this.on('imageChange.konva', (props: any) => {
-      this._removeImageLoad(props.oldVal);
-      this._setImageLoad();
-    });
-
-    this._setImageLoad();
-  }
-  _setImageLoad() {
-    const image = this.image() as any;
-    // check is image is already loaded
-    if (image && image.complete) {
-      return;
-    }
-    // check is video is already loaded
-    if (image && image.readyState === 4) {
-      return;
-    }
-    if (image && image['addEventListener']) {
-      image['addEventListener']('load', this._loadListener);
-    }
-  }
-  _removeImageLoad(image: any) {
-    if (image && image['removeEventListener']) {
-      image['removeEventListener']('load', this._loadListener);
-    }
-  }
-  destroy() {
-    this._removeImageLoad(this.image());
-    super.destroy();
-    return this;
-  }
-
-  _sceneFunc(graphics: PIXI.Graphics) {
+    return;
+    const graphics = new PIXI.Graphics();
     const width = this.getWidth();
     const height = this.getHeight();
     const cornerRadius = this.cornerRadius();
@@ -122,13 +90,44 @@ export class Image extends Shape<ImageConfig> {
       graphics.fill(this.fill() ?? 0xffffff)
       .setStrokeStyle({
         width: this.strokeWidth() ?? 0, 
-        color: this.stroke() ?? 0x000000
+        color: this.stroke() ?? "black"
       });
     }
 
     sprite.mask = graphics;
-    // If you need to draw later, you need to execute save/restore
+
+    this.on('imageChange.konva', (props: any) => {
+      this._removeImageLoad(props.oldVal);
+      this._setImageLoad();
+    });
+
+    this._setImageLoad();
   }
+  _setImageLoad() {
+    const image = this.image() as any;
+    // check is image is already loaded
+    if (image && image.complete) {
+      return;
+    }
+    // check is video is already loaded
+    if (image && image.readyState === 4) {
+      return;
+    }
+    if (image && image['addEventListener']) {
+      image['addEventListener']('load', this._loadListener);
+    }
+  }
+  _removeImageLoad(image: any) {
+    if (image && image['removeEventListener']) {
+      image['removeEventListener']('load', this._loadListener);
+    }
+  }
+  destroy() {
+    this._removeImageLoad(this.image());
+    super.destroy();
+    return this;
+  }
+
   getWidth() {
     return this.attrs.width ?? (this.image() as any)?.width;
   }

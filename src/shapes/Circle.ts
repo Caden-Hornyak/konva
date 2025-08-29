@@ -38,9 +38,10 @@ export class Circle extends Shape<CircleConfig> {
       .fill(this.fill() ?? 0xffffff)
       .setStrokeStyle({
           width: this.strokeWidth() ?? 0, 
-          color: this.stroke() ?? 0x000000
+          color: this.stroke() ?? "black"
       })
       .arc(0, 0, this.attrs.radius || 0, 0, Math.PI * 2, false);
+      this._object.alpha = this.opacity();
     }
   getWidth() {
     return this.radius() * 2;

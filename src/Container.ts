@@ -30,8 +30,14 @@ export interface ContainerConfig extends NodeConfig {
 export abstract class Container<
   ChildType extends Node = Node
 > extends Node<ContainerConfig> {
-  children: Array<ChildType> = [];
+  children: Record<string, ChildType[]> = {};
+  _object: PIXI.Container;
 
+  
+  constructor(config?: ContainerConfig) {
+    super(config);
+    this._object = new PIXI.Container({})
+  }
   /**
    * returns an array of direct descendant nodes
    * @method
@@ -48,11 +54,8 @@ export abstract class Container<
    * });
    */
   getChildren(filterFunc?: (item: Node) => boolean) {
-    const children = this.children || [];
-    if (filterFunc) {
-      return children.filter(filterFunc);
-    }
-    return children;
+    const children = this.children || {};
+    return children
   }
   /**
    * determine if node has children
@@ -61,7 +64,12 @@ export abstract class Container<
    * @returns {Boolean}
    */
   hasChildren() {
-    return this.getChildren().length > 0;
+    let hasChildren = false;
+    for (let key in this.children) {
+        hasChildren = true;
+        break;
+    }
+    return hasChildren;
   }
   /**
    * remove all children. Children will be still in memory.
@@ -70,13 +78,14 @@ export abstract class Container<
    * @name Konva.Container#removeChildren
    */
   removeChildren() {
-    this.getChildren().forEach((child) => {
-      // reset parent to prevent many _setChildrenIndices calls
-      child.parent = null;
-      child.index = 0;
-      child.remove();
-    });
-    this.children = [];
+    for (let key in this.children) {
+        for (let child of this.children[key]) {
+            child.parent = null;
+            child.index = 0;
+            child.remove();
+        }
+    }
+    this.children = {};
     return this;
   }
   /**
@@ -85,13 +94,14 @@ export abstract class Container<
    * @name Konva.Container#destroyChildren
    */
   destroyChildren() {
-    this.getChildren().forEach((child) => {
-      // reset parent to prevent many _setChildrenIndices calls
-      child.parent = null;
-      child.index = 0;
-      child.destroy();
-    });
-    this.children = [];
+    for (let key in this.children) {
+        for (let child of this.children[key]) {
+            child.parent = null;
+            child.index = 0;
+            child.destroy();
+        }
+    }
+    this.children = {};
     return this;
   }
   abstract _validateAdd(node: Node): void;
@@ -118,12 +128,15 @@ export abstract class Container<
       return this;
     }
     const child = children[0];
+    const childName = child.name();
     if (child && child.parent) {
-      child.parent._object.removeChild(child._object);
-      return this;
+      child.remove();
     }
 
     this._object.addChild(child._object);
+    child.parent = this; 
+    this.children[childName] = this.children[childName] ?? [];
+    this.children[childName].push(child)
     // chainable
     return this;
   }
@@ -177,7 +190,8 @@ export abstract class Container<
   find<ChildNode extends Node>(selector): Array<ChildNode> {
     // protecting _generalFind to prevent user from accidentally adding
     // second argument and getting unexpected `findOne` result
-    return this._generalFind<ChildNode>(selector, false);
+    const cleanSelector = selector[0] === "#" || selector[0] === "." ? selector.slice(1) : selector;
+    return (this.children[cleanSelector] ?? []) as unknown as ChildNode[];
   }
   /**
    * return a first node from `find` method
@@ -198,58 +212,23 @@ export abstract class Container<
    * })
    */
   findOne<ChildNode extends Node = Node>(
-    selector: string | Function
+    selector: string
   ): ChildNode | undefined {
-    const result = this._generalFind<ChildNode>(selector, true);
-    return result.length > 0 ? result[0] : undefined;
+    const cleanSelector = selector[0] === "#" || selector[0] === "." ? selector.slice(1) : selector;
+    return ((this.children[cleanSelector] ? this.children[cleanSelector][0] : undefined) ?? []) as unknown as ChildNode;
   }
-  _generalFind<ChildNode extends Node>(
-    selector: string | Function,
-    findOne: boolean
-  ) {
-    const retArr: Array<ChildNode> = [];
 
-    this._descendants((node) => {
-      const valid = node._isMatch(selector);
-      if (valid) {
-        retArr.push(node as ChildNode);
-      }
-      if (valid && findOne) {
-        return true;
-      }
-      return false;
-    });
-
-    return retArr;
-  }
-  private _descendants(fn: (n: Node) => boolean) {
-    let shouldStop = false;
-    const children = this.getChildren();
-    for (const child of children) {
-      shouldStop = fn(child);
-      if (shouldStop) {
-        return true;
-      }
-      if (!child.hasChildren()) {
-        continue;
-      }
-      shouldStop = (child as unknown as Container)._descendants(fn);
-      if (shouldStop) {
-        return true;
-      }
-    }
-    return false;
-  }
   // extenders
   toObject() {
     const obj = Node.prototype.toObject.call(this);
 
     obj.children = [];
 
-    this.getChildren().forEach((child) => {
-      obj.children!.push(child.toObject());
-    });
-
+    for (let key in this.children) {
+      for (let child of this.children[key]) {
+        obj.children!.push(child.toObject());
+      }
+    }
     return obj;
   }
   /**
@@ -270,21 +249,7 @@ export abstract class Container<
 
     return false;
   }
-  clone(obj?: any) {
-    // call super method
-    const node = Node.prototype.clone.call(this, obj);
 
-    this.getChildren().forEach(function (no) {
-      node.add(no.clone());
-    });
-    return node as this;
-  }
-
-  _setChildrenIndices() {
-    this.children?.forEach(function (child, n) {
-      child.index = n;
-    });
-  }
   getClientRect(
     config: {
       skipTransform?: boolean;
@@ -304,38 +269,41 @@ export abstract class Container<
       height: 0,
     };
     const that = this;
-    this.children?.forEach(function (child) {
-      // skip invisible children
-      if (!child.visible()) {
-        return;
+    for (let key in this.children) {
+      for (let child of this.children[key]) {
+        // skip invisible children
+        if (!child.visible()) {
+          continue;
+        }
+
+        const rect = child.getClientRect({
+          relativeTo: that,
+          skipShadow: config.skipShadow,
+          skipStroke: config.skipStroke,
+        });
+
+        // skip invisible children (like empty groups)
+        if (rect.width === 0 && rect.height === 0) {
+          continue;
+        }
+
+        if (minX === undefined) {
+          // initial value for first child
+          minX = rect.x;
+          minY = rect.y;
+          maxX = rect.x + rect.width;
+          maxY = rect.y + rect.height;
+        } else {
+          minX = Math.min(minX, rect.x);
+          minY = Math.min(minY, rect.y);
+          maxX = Math.max(maxX, rect.x + rect.width);
+          maxY = Math.max(maxY, rect.y + rect.height);
+        }
+
+    
       }
-
-      const rect = child.getClientRect({
-        relativeTo: that,
-        skipShadow: config.skipShadow,
-        skipStroke: config.skipStroke,
-      });
-
-      // skip invisible children (like empty groups)
-      if (rect.width === 0 && rect.height === 0) {
-        return;
-      }
-
-      if (minX === undefined) {
-        // initial value for first child
-        minX = rect.x;
-        minY = rect.y;
-        maxX = rect.x + rect.width;
-        maxY = rect.y + rect.height;
-      } else {
-        minX = Math.min(minX, rect.x);
-        minY = Math.min(minY, rect.y);
-        maxX = Math.max(maxX, rect.x + rect.width);
-        maxY = Math.max(maxY, rect.y + rect.height);
-      }
-    });
-
-    // if child is group we need to make sure it has visible shapes inside
+    }
+      // if child is group we need to make sure it has visible shapes inside
     const shapes = this.find('Shape');
     let hasVisible = false;
     for (let i = 0; i < shapes.length; i++) {

@@ -166,8 +166,6 @@ export const Factory = {
         });
       }
 
-      this._fireChangeEvent(attr, oldVal, val);
-
       if (after) {
         after.call(this);
       }
