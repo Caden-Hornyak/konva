@@ -6,9 +6,9 @@ import { _registerNode } from '../Global';
 import { Util } from '../Util';
 import * as PIXI from "pixi.js";
 import { stages } from '../Stage';
+import { RADIUS_TEXTURE_SIZE } from '../Node';
 
 const textureCache: Record<string, PIXI.Texture> = {};
-const RADIUS_TEXTURE_SIZE = 64;
 export interface RegularPolygonConfig extends ShapeConfig {
   sides: number;
   radius: number;
@@ -41,11 +41,12 @@ export class RegularPolygon extends Shape<RegularPolygonConfig> {
 
   constructor(config?: RegularPolygonConfig) {
     super(config)
-    
-    const points = this._getPoints(),
-      radius = this.radius(),
-      sides = this.sides(),
-      cornerRadius = this.cornerRadius();
+
+    const sides = config?.sides ?? 3;
+    const points = this._getPoints(sides),
+      cornerRadius = config?.cornerRadius ?? 0,
+      strokeWidth = config?.strokeWidth ?? 0,
+      stroke = (config?.stroke ?? "black") as string;
 
     let texture: PIXI.Texture;
     let textureKey = `${sides}_${cornerRadius}`
@@ -70,8 +71,8 @@ export class RegularPolygon extends Shape<RegularPolygonConfig> {
         .closePath()
         .fill(0xFFFFFF)
         .setStrokeStyle({
-            width: this.strokeWidth(), 
-            color: this.stroke() ?? "black"
+            width: strokeWidth, 
+            color: stroke
         });
         
         texture = stages[0].application.renderer.generateTexture(graphics);
@@ -79,18 +80,11 @@ export class RegularPolygon extends Shape<RegularPolygonConfig> {
     }
 
     this._object = new PIXI.Sprite(texture);
-    this._object.tint = this.fill();
-    this._object.width = radius * 2;
-    this._object.height = radius * 2;
-    this._object.x = this.x();
-    this._object.y = this.y();
-
-    // Set the anchor to the center so the polygon scales correctly from its origin.
-    // Since the texture was created with a center at (0, 0), the anchor should be 0.5.
     this._object.anchor.set(0.5);
+
+    this.setAttrs(config);
   }
-  _getPoints() {
-    const sides = this.attrs.sides as number;
+  _getPoints(sides) {
     const radius = RADIUS_TEXTURE_SIZE;
     const points: Vector2d[] = [];
     for (let n = 0; n < sides; n++) {
@@ -99,11 +93,10 @@ export class RegularPolygon extends Shape<RegularPolygonConfig> {
         y: -1 * radius * Math.cos((n * 2 * Math.PI) / sides),
       });
     }
-    console.log()
     return points;
   }
   getSelfRect() {
-    const points = this._getPoints();
+    const points = this._getPoints(this.attrs.sides as number);
 
     let minX = points[0].x;
     let maxX = points[0].y;

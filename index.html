@@ -40,7 +40,7 @@
     const func = async () => {
         stage = await Konva.Stage.create({ container: 'stage-container', width: 500, height: 500, x: 0, y: 0 });
 
-        layer = new Konva.Layer();
+        layer = new Konva.Layer(  );
         
     
         stage.add(layer);
@@ -51,37 +51,41 @@
      const colors = ['red', 'black', 'blue', 'green', 'yellow', 'orange']
       func().then(async () => {
         group = new Konva.Group({
-        width: 500,
-        height: 500,
-        x: 0,
-         y: 0
+        width: 250,
+        height: 50,
+        x: 100,
+         y: 100
     })
-        // stage.application.ticker.add(() => {
-        // frameCount++;
-        // const now = performance.now();
-        // if (now - lastTime >= 1000) {
-        //     fps = frameCount;
-        //     frameCount = 0;
-        //     lastTime = now;
-        //     console.log("Pixi FPS:", fps);
-        // }
-        // });
         layer.add(group)
-        for (let i = 0; i < 1; i++) {
-            console.log(Math.random() * stage.width())
-            rects.push(new Konva.Text({
-                x: Math.random() * stage.width(),
-                y: Math.random() * stage.height(),
-                fontSize: 40,
-                fill: colors[Math.round(Math.random() * (colors.length-1))],
-                text: "HELLO WORLD",
-                // cornerRadius: 5,
-                // stroke: "black",
-                name: "hello"
-                }));
+        
+
+        
+            rects.push(new Konva.Rect({
+            x: 0,
+            y: 0,
+            fill: colors[Math.round(Math.random() * (colors.length-1))],
+            width: 250,
+            height: 20,
+            name: "hello",
+            cornerRadius: 30,
+            stroke: "black",
+            strokeWidth: 2
+            }));
+        group.add(rects[rects.length-1]);
+
+        rects.push(new Konva.Text({
+           text: "hello",
+           fontSize: 20,
+           fill: "yellow",
+           width: 250,
+            height: 50,
+            align: "right",
+				verticalAlign: "middle",
+				padding: 7,
+            }));
         group.add(rects[rects.length-1]);
      
-        }
+
         }) 
       
     const animation = new Konva.Animation(() => {

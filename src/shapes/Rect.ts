@@ -8,8 +8,7 @@ import { getNumberOrArrayOfNumbersValidator } from '../Validators';
 import * as PIXI from "pixi.js";
 import { stages } from '../Stage';
 
-const TEXTURE_WIDTH = 64,
-      TEXTURE_HEIGHT = 64;
+const TEXTURE_LENGTH = 128;
 
 export interface RectConfig extends ShapeConfig {
   cornerRadius?: number | number[];
@@ -41,12 +40,13 @@ export class Rect extends Shape<RectConfig> {
   constructor(config?: RectConfig) {
     super(config);
 
-    
-    const cornerRadius = this.cornerRadius(),
-      width = this.width(),
-      height = this.height(),
-      x = this.x(),
-      y = this.y();
+    const cornerRadius = Array.isArray(config?.cornerRadius) 
+      ? config?.cornerRadius.length === 4 ? config?.cornerRadius : config?.cornerRadius[0]
+      : Array.from({length: 4 }).fill(config?.cornerRadius ?? 0),
+      width = config?.width ?? 0,
+      height = config?.height ?? 0,
+      strokeWidth = config?.strokeWidth ?? 0,
+      stroke = (config?.stroke ?? "black") as string;
 
     let cornerRadiusList: number[] = [
         Math.min(cornerRadius[0] || 0, width / 2, height / 2),
@@ -55,24 +55,28 @@ export class Rect extends Shape<RectConfig> {
         Math.min(cornerRadius[3] || 0, width / 2, height / 2)
     ];
 
+    for (let corner of cornerRadiusList) { corner = (corner / Math.min(width, height)) * TEXTURE_LENGTH}
+
     let texture: PIXI.Texture;
-    const textureKey = `${cornerRadiusList[0]}_${cornerRadiusList[1]}_${cornerRadiusList[2]}_${cornerRadiusList[3]}_${this.strokeWidth()}_${this.stroke()}`;
+    const textureKey = `${cornerRadiusList[0]}_${cornerRadiusList[1]}_${cornerRadiusList[2]}_${cornerRadiusList[3]}_${stroke}_${strokeWidth}`;
     if (textureCache[textureKey]) {
       texture = textureCache[textureKey];
     } else {
       const graphics: PIXI.Graphics = new PIXI.Graphics();
       graphics.beginPath();
       if (!cornerRadius) {
-        graphics.rect(0, 0, TEXTURE_WIDTH, TEXTURE_HEIGHT);
+        graphics.rect(0, 0, TEXTURE_LENGTH, TEXTURE_LENGTH);
       } else {
-        Util.drawRoundedRectPath(graphics, TEXTURE_WIDTH, TEXTURE_HEIGHT, cornerRadius);
+        Util.drawRoundedRectPath(graphics, TEXTURE_LENGTH, TEXTURE_LENGTH, cornerRadiusList);
       }
 
-      graphics.fill(0xFFFFFF)
+      graphics
         .setStrokeStyle({
-          width: this.strokeWidth(), 
-          color: this.stroke() ?? "black"
-        });
+          width: strokeWidth, 
+          color: stroke
+        })
+        .stroke()
+        .fill(0xFFFFFF);
       texture = stages[0].application.renderer.generateTexture(graphics);
       textureCache[textureKey] = texture;
     }
@@ -83,12 +87,8 @@ export class Rect extends Shape<RectConfig> {
       Math.max(cornerRadiusList[1], cornerRadiusList[2]),
       Math.max(cornerRadiusList[2], cornerRadiusList[3]),
     );
-    this._object.tint = this.fill();
-    this._object.alpha = this.opacity();
-    this._object.width = width;
-    this._object.height = height
-    this._object.x = x;
-    this._object.y = y;
+    
+    this.setAttrs(config);
   }
   
   cornerRadius: GetSet<number | number[], this>;

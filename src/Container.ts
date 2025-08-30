@@ -36,7 +36,10 @@ export abstract class Container<
   
   constructor(config?: ContainerConfig) {
     super(config);
-    this._object = new PIXI.Container({})
+    this._object = new PIXI.Container({
+    });
+
+    this.setAttrs(config);
   }
   /**
    * returns an array of direct descendant nodes
@@ -129,6 +132,7 @@ export abstract class Container<
     }
     const child = children[0];
     const childName = child.name();
+
     if (child && child.parent) {
       child.remove();
     }
@@ -215,7 +219,7 @@ export abstract class Container<
     selector: string
   ): ChildNode | undefined {
     const cleanSelector = selector[0] === "#" || selector[0] === "." ? selector.slice(1) : selector;
-    return ((this.children[cleanSelector] ? this.children[cleanSelector][0] : undefined) ?? []) as unknown as ChildNode;
+    return (this.children[cleanSelector] ? this.children[cleanSelector][0] : undefined) as unknown as ChildNode;
   }
 
   // extenders

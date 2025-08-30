@@ -14,6 +14,7 @@ import {
 import * as PIXI from "pixi.js";
 
 export type Filter = (this: Node, imageData: ImageData) => void;
+export const RADIUS_TEXTURE_SIZE = 128;
 
 type globalCompositeOperationType =
   | ''
@@ -75,7 +76,93 @@ export interface NodeConfig {
 }
 
 const konvaToPIXIAttributeMap = {
-    'opacity': 'alpha'
+    opacity: (pixiObject: PixiObject, value) => { pixiObject.alpha = value },
+    align: (pixiObject: PixiObject, value) => {          
+      const text = pixiObject as any;
+      if (value !== undefined) text._align= value;
+      if (text._width === undefined || value === undefined) return;
+      
+      if (value === "middle") {
+        text.x = text._width / 2;
+        text.anchor.x = 0.5;
+      } else if (value === "right") {
+        text.x = text._width;
+        text.anchor.x = 1;
+      } else {
+        text.anchor.x = 0;
+      } 
+    },
+    verticalAlign: (pixiObject: PixiObject, value) => {
+        const text = pixiObject as any;
+        if (value !== undefined) text._verticalAlign = value;
+        if (text._height === undefined || value === undefined) return;
+
+        if (value === "middle") {
+          text.y = text._height / 2;
+          text.anchor.y = 0.5;
+        } else if (value === "bottom") {
+          text.y = text._height;
+          text.anchor.y = 1;
+        } else {
+          text.anchor.y = 0;
+        }
+       
+    },
+    fill: (pixiObject: PixiObject, value) => { 
+      if (pixiObject instanceof PIXI.Text) {
+        pixiObject.style.fill = value;
+      } else {
+        pixiObject.tint = value
+      }
+     },
+    stroke: (pixiObject: PixiObject, value) => { 
+      if ((pixiObject as any)._type === "Line") {
+        konvaToPIXIAttributeMap.fill(pixiObject, value);
+      }
+    },
+    strokeWidth: (pixiObject: PixiObject, value) => { 
+      if ((pixiObject as any)._type === "Line") {
+        pixiObject.height = value;
+      }
+    },
+    width: (pixiObject: PixiObject, value) => { 
+      const item = pixiObject as any;
+      item._width = value;
+      if (pixiObject instanceof PIXI.Text) {
+        konvaToPIXIAttributeMap.align(item, item._align);
+      } else {
+        pixiObject.width = value;
+      }
+     },
+    height: (pixiObject: PixiObject, value) => { 
+      const item = pixiObject as any;
+      item._height = value;
+      if (pixiObject instanceof PIXI.Text) {
+        konvaToPIXIAttributeMap.verticalAlign(item, item._verticalAlign);
+      } else {
+        pixiObject.height = value;
+      }
+     },
+     padding: (pixiObject: PixiObject, value) => {
+      const item = pixiObject as any;
+      if (value !== undefined) item._padding = value;
+      if (item._padding && item._width && item._height) {
+        const xDir = item._align === "right" ? -1 : 1;
+        const yDir = item._verticalAlign === "bottom" ? -1 : 1;
+
+        if (item._align !== "middle") item.x += xDir * value;
+        if (item._verticalAlign !== "middle") item.y += yDir * value;
+      }
+     },
+     rotation: (pixiObject: PixiObject, value) => { pixiObject.rotation = value * (Math.PI / 180) },
+     radius: (pixiObject: PixiObject, value) => { 
+      pixiObject.width = value / (RADIUS_TEXTURE_SIZE / 2);
+      pixiObject.height = value / (RADIUS_TEXTURE_SIZE / 2);
+      },
+      fontSize: (pixiObject: PixiObject, value) => { 
+        (pixiObject as PIXI.Text).style.fontSize = value;
+      }
+
 }
 
 // CONSTANTS
@@ -137,6 +224,7 @@ export type KonvaEventListener<This, EventType> = (
   ev: KonvaEventObject<EventType, This>
 ) => void;
 
+export type PixiObject = PIXI.Graphics | PIXI.NineSlicePlane | PIXI.Text | PIXI.Sprite | PIXI.Container | PIXI.Sprite;
 /**
  * Node constructor. Nodes are entities that can be transformed, layered,
  * and have bound events. The stage, layers, groups, and shapes all extend Node.
@@ -160,7 +248,7 @@ export abstract class Node<Config extends NodeConfig = NodeConfig> {
   _attrsAffectingSize!: string[];
   _batchingTransformChange = false;
   _needClearTransformCache = false;
-  _object: PIXI.Graphics | PIXI.NineSlicePlane | PIXI.Text | PIXI.Sprite | PIXI.Container | PIXI.Sprite;
+  _object: PixiObject;
 
   _filterUpToDate = false;
   _isUnderCache = false;
@@ -173,8 +261,7 @@ export abstract class Node<Config extends NodeConfig = NodeConfig> {
   constructor(config?: Config) {
     // on initial set attrs wi don't need to fire change events
     // because nobody is listening to them yet
-    this.setAttrs(config);
-    this._shouldFireChangeEvents = true;
+    
 
     // all change event listeners are attached to the prototype
   }
@@ -1388,6 +1475,7 @@ export abstract class Node<Config extends NodeConfig = NodeConfig> {
 
   _setAttr(key: string, val) {
     const oldVal = this.attrs[key];
+
     if (oldVal === val && !Util.isObject(val)) {
       return;
     }
@@ -1397,11 +1485,14 @@ export abstract class Node<Config extends NodeConfig = NodeConfig> {
       this.attrs[key] = val;
     }
 
-     // forgive me
-    let cleanKey = konvaToPIXIAttributeMap[key] ?? key;
-    if (this._object && this._object[cleanKey] !== undefined) {
-        this._object[cleanKey] = val;
-    }
+     // forgive me for I have sinned
+     if (this._object) {
+      if (konvaToPIXIAttributeMap[key]) {
+        konvaToPIXIAttributeMap[key](this._object, val)
+      } else if (this._object[key] !== undefined) {
+        this._object[key] = val;
+      }
+     }
   }
   _setComponentAttr(key, component, val) {
     let oldVal;

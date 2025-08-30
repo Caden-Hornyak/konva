@@ -179,57 +179,15 @@ export class Text extends Shape<TextConfig> {
   textWidth: number;
   textHeight: number;
   constructor(config?: TextConfig) {
-    super(checkDefaultFill(config));
+    super(config);
 
-    if (!this.text()) {
-      return;
-    }
-
-    let padding = this.padding(),
-      fontSize = this.fontSize(),
-      lineHeightPx = this.lineHeight() * fontSize,
-      verticalAlign = this.verticalAlign(),
-      direction = this.direction(),
-      alignY = 0,
-      align = this.align(),
-      totalWidth = this.getWidth(),
-      letterSpacing = this.letterSpacing(),
-      fill = this.fill(),
-      textDecoration = this.textDecoration(),
-      shouldUnderline = textDecoration.indexOf('underline') !== -1,
-      shouldLineThrough = textDecoration.indexOf('line-through') !== -1,
-      n;
-
-    const text = new PIXI.Text({text: this.text(), style: {
-      fontFamily: "Arial",
-      fontSize: fontSize,
-      fontWeight: "bold",
-      fill: fill ?? 0x000000,
-      align: align as PIXI.TextStyleAlign,
-      lineHeight: this.lineHeight(),
-      letterSpacing: letterSpacing,
+    const text = new PIXI.Text({text: "", style: {
     }});
     this._object = text;
-
+    
+    this.setAttrs(config);
     if (!this.width()) {
-        this.width(text.width);
-    }
-
-    if (verticalAlign === "middle") {
-      text.anchor.y = 0.5;
-    } else if (verticalAlign === "bottom") {
-      text.anchor.y = 1;
-    } else {
-      text.anchor.y = 0; // top (default)
-    }
-
-    // horizontal anchor for "padding/align"
-    if (align === "center") {
-      text.anchor.x = 0.5;
-    } else if (align === "right") {
-      text.anchor.x = 1;
-    } else {
-      text.anchor.x = 0; // left
+        this.width(this._object.width)
     }
   }
 

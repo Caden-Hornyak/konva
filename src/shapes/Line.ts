@@ -115,92 +115,12 @@ export class Line<
     }
     
     const line = new PIXI.Sprite(lineTexture);
+    line.anchor.y = .5;
     this._object = line;
+    (this._object as any)._type = "Line";
+    this.setAttrs(config);
     this.changePoints();
-    this._object.tint = this.stroke() ?? "black";
-    this._object.height = this.strokeWidth();
-    this._object.alpha = this.opacity();
-    // const points = this.points(),
-    //   length = points.length,
-    //   tension = this.tension(),
-    //   closed = this.closed(),
-    //   bezier = this.bezier();
-
-    // if (!length) {
-    //   return;
-    // }
-    // let n = 0;
-
-    // graphics.beginPath();
-    // graphics.moveTo(points[0], points[1]);
-
-    // // tension
-    // if (tension !== 0 && length > 4) {
-    //   const tp = this.getTensionPoints();
-    //   const len = tp.length;
-    //   n = closed ? 0 : 4;
-
-    //   if (!closed) {
-    //     graphics.quadraticCurveTo(tp[0], tp[1], tp[2], tp[3]);
-    //   }
-
-    //   while (n < len - 2) {
-    //     graphics.bezierCurveTo(
-    //       tp[n++],
-    //       tp[n++],
-    //       tp[n++],
-    //       tp[n++],
-    //       tp[n++],
-    //       tp[n++]
-    //     );
-    //   }
-
-    //   if (!closed) {
-    //     graphics.quadraticCurveTo(
-    //       tp[len - 2],
-    //       tp[len - 1],
-    //       points[length - 2],
-    //       points[length - 1]
-    //     );
-    //   }
-    // } else if (bezier) {
-    //   // no tension but bezier
-    //   n = 2;
-
-    //   while (n < length) {
-    //     graphics.bezierCurveTo(
-    //       points[n++],
-    //       points[n++],
-    //       points[n++],
-    //       points[n++],
-    //       points[n++],
-    //       points[n++]
-    //     );
-    //   }
-    // } else {
-    //   // no tension
-    //   for (n = 2; n < length; n += 2) {
-    //     graphics.lineTo(points[n], points[n + 1]);
-    //   }
-    // }
-
-    // // closed e.g. polygons and blobs
-    // if (closed) {
-    //   graphics.closePath();
-    //   graphics
-    //     .fill(this.fill() ?? 0xffffff)
-    //     .setStrokeStyle({
-    //       width: this.strokeWidth() ?? 0, 
-    //       color: this.stroke() ?? 0x000000
-    //     });
-    // } else {
-    //   // open e.g. lines and splines
-    //   graphics
-    //     .setStrokeStyle({
-    //       width: this.strokeWidth() ?? 0, 
-    //       color: this.stroke() ?? 0x000000
-    //     });
-    // }
+    
   }
 
   changePoints() {
