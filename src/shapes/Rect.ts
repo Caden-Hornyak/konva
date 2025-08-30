@@ -58,7 +58,8 @@ export class Rect extends Shape<RectConfig> {
     for (let corner of cornerRadiusList) { corner = (corner / Math.min(width, height)) * TEXTURE_LENGTH}
 
     let texture: PIXI.Texture;
-    const textureKey = `${cornerRadiusList[0]}_${cornerRadiusList[1]}_${cornerRadiusList[2]}_${cornerRadiusList[3]}_${stroke}_${strokeWidth}`;
+    const textureKey = `${cornerRadiusList[0]}_${cornerRadiusList[1]}_${cornerRadiusList[2]}_
+    ${cornerRadiusList[3]}_${stroke}_${strokeWidth}_${config?.fillLinearGradientColorStops}`;
     if (textureCache[textureKey]) {
       texture = textureCache[textureKey];
     } else {
@@ -70,22 +71,34 @@ export class Rect extends Shape<RectConfig> {
         Util.drawRoundedRectPath(graphics, TEXTURE_LENGTH, TEXTURE_LENGTH, cornerRadiusList);
       }
 
+      let fill: number | PIXI.FillGradient = 0xFFFFFF;
+      if (config?.fillLinearGradientColorStops) {
+        fill = new PIXI.FillGradient({
+          start: config?.fillLinearGradientStartPoint ?? {x: 0, y: 0},
+          end: config?.fillLinearGradientEndPoint ?? {x: TEXTURE_LENGTH, y: 0},
+          colorStops: [
+            { offset: config?.fillLinearGradientColorStops[0] as number, color: config?.fillLinearGradientColorStops[1] },
+            { offset: config?.fillLinearGradientColorStops[2] as number, color: config?.fillLinearGradientColorStops[3] }
+          ],
+        });
+      }
+
       graphics
         .setStrokeStyle({
           width: strokeWidth, 
           color: stroke
         })
         .stroke()
-        .fill(0xFFFFFF);
+        .fill(fill);
       texture = stages[0].application.renderer.generateTexture(graphics);
       textureCache[textureKey] = texture;
     }
     this._object = new PIXI.NineSlicePlane(
       texture, 
-      Math.max(cornerRadiusList[0], cornerRadiusList[3]),
-      Math.max(cornerRadiusList[1], cornerRadiusList[1]),
-      Math.max(cornerRadiusList[1], cornerRadiusList[2]),
-      Math.max(cornerRadiusList[2], cornerRadiusList[3]),
+      Math.max(cornerRadiusList[0], cornerRadiusList[3], strokeWidth),
+      Math.max(cornerRadiusList[1], cornerRadiusList[1], strokeWidth),
+      Math.max(cornerRadiusList[1], cornerRadiusList[2], strokeWidth),
+      Math.max(cornerRadiusList[2], cornerRadiusList[3], strokeWidth),
     );
     
     this.setAttrs(config);

@@ -12,6 +12,7 @@ import {
   getStringValidator,
 } from './Validators';
 import * as PIXI from "pixi.js";
+import {v4 as uuidv4} from 'uuid';
 
 export type Filter = (this: Node, imageData: ImageData) => void;
 export const RADIUS_TEXTURE_SIZE = 128;
@@ -91,6 +92,8 @@ const konvaToPIXIAttributeMap = {
       } else {
         text.anchor.x = 0;
       } 
+      konvaToPIXIAttributeMap.padding(pixiObject, (pixiObject as any)._padding);
+
     },
     verticalAlign: (pixiObject: PixiObject, value) => {
         const text = pixiObject as any;
@@ -106,7 +109,7 @@ const konvaToPIXIAttributeMap = {
         } else {
           text.anchor.y = 0;
         }
-       
+        konvaToPIXIAttributeMap.padding(pixiObject, (pixiObject as any)._padding);
     },
     fill: (pixiObject: PixiObject, value) => { 
       if (pixiObject instanceof PIXI.Text) {
@@ -156,8 +159,8 @@ const konvaToPIXIAttributeMap = {
      },
      rotation: (pixiObject: PixiObject, value) => { pixiObject.rotation = value * (Math.PI / 180) },
      radius: (pixiObject: PixiObject, value) => { 
-      pixiObject.width = value / (RADIUS_TEXTURE_SIZE / 2);
-      pixiObject.height = value / (RADIUS_TEXTURE_SIZE / 2);
+      pixiObject.width = value * 2;
+      pixiObject.height = value * 2;
       },
       fontSize: (pixiObject: PixiObject, value) => { 
         (pixiObject as PIXI.Text).style.fontSize = value;
@@ -261,7 +264,7 @@ export abstract class Node<Config extends NodeConfig = NodeConfig> {
   constructor(config?: Config) {
     // on initial set attrs wi don't need to fire change events
     // because nobody is listening to them yet
-    
+    this.id(uuidv4())
 
     // all change event listeners are attached to the prototype
   }
@@ -549,10 +552,9 @@ export abstract class Node<Config extends NodeConfig = NodeConfig> {
     // traversal must be cleared when removing a node
 
     if (this.parent) {
-        this.parent._object.removeChild(this._object);
-        this.parent.children[this.name()] = this.parent.children[this.name()].filter((node) => node.id() === this.id());
+      this.parent._object.removeChild(this._object);
+      delete this.parent.children[this.name()][this.id()]
     }
-    
     
     this.parent = null;
   }

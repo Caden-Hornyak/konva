@@ -14,12 +14,13 @@ export default {
       freeze: false,
       globals: {
         'pixi.js': 'PIXI', // Tell UMD that `pixi.js` is available as `PIXI`
+        'uuid': 'uuid'
       },
     },
     // { file: pkg.module, format: 'es', sourcemap: true }
   ],
   // Indicate here external modules you don't wanna include in your bundle (i.e.: 'lodash')
-  external: ['pixi.js'],
+  external: ['pixi.js', 'uuid'],
   watch: {
     include: 'src/**',
   },

@@ -30,7 +30,7 @@ export interface ContainerConfig extends NodeConfig {
 export abstract class Container<
   ChildType extends Node = Node
 > extends Node<ContainerConfig> {
-  children: Record<string, ChildType[]> = {};
+  children: Record<string, Record<string, ChildType>> = {};
   _object: PIXI.Container;
 
   
@@ -82,7 +82,8 @@ export abstract class Container<
    */
   removeChildren() {
     for (let key in this.children) {
-        for (let child of this.children[key]) {
+        for (let childId in this.children[key]) {
+            const child = this.children[key][childId];
             child.parent = null;
             child.index = 0;
             child.remove();
@@ -98,7 +99,8 @@ export abstract class Container<
    */
   destroyChildren() {
     for (let key in this.children) {
-        for (let child of this.children[key]) {
+        for (let childId in this.children[key]) {
+            const child = this.children[key][childId];
             child.parent = null;
             child.index = 0;
             child.destroy();
@@ -139,8 +141,8 @@ export abstract class Container<
 
     this._object.addChild(child._object);
     child.parent = this; 
-    this.children[childName] = this.children[childName] ?? [];
-    this.children[childName].push(child)
+    this.children[childName] = this.children[childName] ?? {};
+    this.children[childName][child.id()] = child;
     // chainable
     return this;
   }
@@ -195,7 +197,7 @@ export abstract class Container<
     // protecting _generalFind to prevent user from accidentally adding
     // second argument and getting unexpected `findOne` result
     const cleanSelector = selector[0] === "#" || selector[0] === "." ? selector.slice(1) : selector;
-    return (this.children[cleanSelector] ?? []) as unknown as ChildNode[];
+    return Object.values(this.children[cleanSelector] ?? {}) as unknown as ChildNode[];
   }
   /**
    * return a first node from `find` method
@@ -219,7 +221,12 @@ export abstract class Container<
     selector: string
   ): ChildNode | undefined {
     const cleanSelector = selector[0] === "#" || selector[0] === "." ? selector.slice(1) : selector;
-    return (this.children[cleanSelector] ? this.children[cleanSelector][0] : undefined) as unknown as ChildNode;
+    let foundChildId: string = "";
+    for (let childId in (this.children[cleanSelector] ?? {})) {
+        foundChildId = childId;
+        break;
+    }
+    return (this.children[cleanSelector] ? this.children[cleanSelector][foundChildId] : undefined) as unknown as ChildNode;
   }
 
   // extenders
@@ -229,7 +236,8 @@ export abstract class Container<
     obj.children = [];
 
     for (let key in this.children) {
-      for (let child of this.children[key]) {
+      for (let childId in this.children[key]) {
+        const child = this.children[key][childId];
         obj.children!.push(child.toObject());
       }
     }
@@ -274,7 +282,8 @@ export abstract class Container<
     };
     const that = this;
     for (let key in this.children) {
-      for (let child of this.children[key]) {
+      for (let childId in this.children[key]) {
+        const child = this.children[key][childId];
         // skip invisible children
         if (!child.visible()) {
           continue;
