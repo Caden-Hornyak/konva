@@ -58,7 +58,6 @@ export class RegularPolygon extends Shape<RegularPolygonConfig> {
         graphics.beginPath();
 
         if (!cornerRadius) {
-            console.log(points)
             graphics.moveTo(points[0].x, points[0].y);
             for (let n = 1; n < points.length; n++) {
                 graphics.lineTo(points[n].x, points[n].y);

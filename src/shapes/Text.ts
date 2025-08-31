@@ -184,11 +184,13 @@ export class Text extends Shape<TextConfig> {
     const text = new PIXI.Text({text: "", style: {
     }});
     this._object = text;
-    
+
     this.setAttrs(config);
-    if (!this.width()) {
-        this.width(this._object.width)
+    
+    if (!this.height()) {
+        this.height(this._object.height);
     }
+
   }
 
   setText(text: string) {
@@ -201,16 +203,10 @@ export class Text extends Shape<TextConfig> {
     return this;
   }
   getWidth() {
-    const isAuto = this.attrs.width === AUTO || this.attrs.width === undefined;
-    return isAuto ? this.getTextWidth() + this.padding() * 2 : this.attrs.width;
+    return this.attrs["width"] ?? this._object.width;
   }
   getHeight() {
-    const isAuto =
-      this.attrs.height === AUTO || this.attrs.height === undefined;
-    return isAuto
-      ? this.fontSize() * this.textArr.length * this.lineHeight() +
-          this.padding() * 2
-      : this.attrs.height;
+    return this.attrs["height"] ?? this._object.height;
   }
   /**
    * get pure text width without padding
@@ -227,6 +223,8 @@ export class Text extends Shape<TextConfig> {
     );
     return this.textHeight;
   }
+
+
 
   _getContextFont() {
     return (

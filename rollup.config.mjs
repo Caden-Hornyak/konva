@@ -30,6 +30,7 @@ export default {
     // Compile TypeScript files
     typescript({
       useTsconfigDeclarationDir: true,
+
       abortOnError: false,
       removeComments: false,
       tsconfigOverride: {

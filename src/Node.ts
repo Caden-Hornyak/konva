@@ -149,7 +149,7 @@ const konvaToPIXIAttributeMap = {
      padding: (pixiObject: PixiObject, value) => {
       const item = pixiObject as any;
       if (value !== undefined) item._padding = value;
-      if (item._padding && item._width && item._height) {
+      if (item._padding) {
         const xDir = item._align === "right" ? -1 : 1;
         const yDir = item._verticalAlign === "bottom" ? -1 : 1;
 
@@ -164,7 +164,16 @@ const konvaToPIXIAttributeMap = {
       },
       fontSize: (pixiObject: PixiObject, value) => { 
         (pixiObject as PIXI.Text).style.fontSize = value;
-      }
+      },
+      fontWeight: (pixiObject: PixiObject, value) => { 
+        (pixiObject as PIXI.Text).style.fontWeight = value;
+      },
+      fontFamily: (pixiObject: PixiObject, value) => { 
+        (pixiObject as PIXI.Text).style.fontFamily = value;
+      },
+      fontStyle: (pixiObject: PixiObject, value) => { 
+        (pixiObject as PIXI.Text).style.fontStyle = value;
+      },
 
 }
 
