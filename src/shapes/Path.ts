@@ -10,7 +10,7 @@ import {
 import { GetSet, PathSegment } from '../types';
 
 export interface PathConfig extends ShapeConfig {
-  data?: string;
+  texture: any;
 }
 /**
  * Path constructor.
@@ -33,87 +33,18 @@ export interface PathConfig extends ShapeConfig {
  * });
  */
 export class Path extends Shape<PathConfig> {
-  _object: PIXI.Graphics;
+  _object: PIXI.Sprite;
   dataArray: PathSegment[] = [];
   pathLength = 0;
 
   constructor(config?: PathConfig) {
     super(config);
-    this._readDataAttribute();
+    if (config?.texture) {
+        this._object = new PIXI.Sprite(config.texture);
+    }
 
-    this.on('dataChange.konva', function () {
-      this._readDataAttribute();
-    });
-
-    const ca = this.dataArray;
-
-    const graphics = new PIXI.Graphics();
-    this._object = graphics;
+    this.setAttrs(config);
     
-    // context position
-    graphics.beginPath();
-    let isClosed = false;
-    for (let n = 0; n < ca.length; n++) {
-      const c = ca[n].command;
-      const p = ca[n].points;
-      switch (c) {
-        case 'L':
-          graphics.lineTo(p[0], p[1]);
-          break;
-        case 'M':
-          graphics.moveTo(p[0], p[1]);
-          break;
-        case 'C':
-          graphics.bezierCurveTo(p[0], p[1], p[2], p[3], p[4], p[5]);
-          break;
-        case 'Q':
-          graphics.quadraticCurveTo(p[0], p[1], p[2], p[3]);
-          break;
-        case 'A':
-          const cx = p[0],
-            cy = p[1],
-            rx = p[2],
-            ry = p[3],
-            theta = p[4],
-            dTheta = p[5],
-            psi = p[6],
-            fs = p[7];
-
-          const r = rx > ry ? rx : ry;
-          const scaleX = rx > ry ? 1 : rx / ry;
-          const scaleY = rx > ry ? ry / rx : 1;
-
-          graphics.position.set(graphics.position.x+cx, graphics.position.y+cy);
-          graphics.rotation = psi;
-          graphics.scale.set(scaleX, scaleY);
-          graphics.arc(0, 0, r, theta, theta + dTheta, fs === 0);
-          graphics.scale.set(1/scaleX, 1/scaleY);
-          graphics.rotation = 0;
-          graphics.position.set(graphics.position.x-cx, graphics.position.y-cy);
-          graphics.position.set(0, 0);
-
-          break;
-        case 'z':
-          isClosed = true;
-          graphics.closePath();
-          break;
-      }
-    }
-
-    if (!isClosed && !this.hasFill()) {
-      graphics
-        .fill(this.fill() ?? 0xffffff)
-        .setStrokeStyle({
-          width: this.strokeWidth() ?? 0, 
-          color: this.stroke() ?? 0x000000
-        });
-    } else {
-      graphics
-        .setStrokeStyle({
-          width: this.strokeWidth() ?? 0, 
-          color: this.stroke() ?? 0x000000
-        });
-    }
   }
 
   _readDataAttribute() {

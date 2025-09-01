@@ -163,7 +163,7 @@ export class Stage extends Container<Layer> {
     this._checkVisibility();
     stages.push(this);
   }
-  static async create(config) {
+  static async create(config: StageConfig) {
     // Create a new instance using the private constructor
     const stage = new Stage(config);
 
@@ -172,7 +172,7 @@ export class Stage extends Container<Layer> {
     await stage.application.init({
         width: config.width,
         height: config.height,
-        backgroundColor: 0x1099bb,
+        backgroundColor: config.backgroundColor ?? 0x1099bb,
         antialias: true,
         resolution: 1,
         preference: 'webgl'

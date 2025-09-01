@@ -39,7 +39,7 @@
         let stage;
         let layer;
     const func = async () => {
-        stage = await Konva.Stage.create({ container: 'stage-container', width: 500, height: 500, x: 0, y: 0 });
+        stage = await Konva.Stage.create({ container: 'stage-container', width: 1000, height: 1000, x: 0, y: 0, backgroundColor: "#4a4c48" });
 
         layer = new Konva.Layer(  );
         
@@ -52,34 +52,40 @@
      const colors = ['red', 'black', 'blue', 'green', 'yellow', 'orange']
       func().then(async () => {
         group = new Konva.Group({
-        width: 250,
-        height: 50,
+        width: 200,
+           height: 100,
         x: 100,
          y: 100
     })
         layer.add(group)
         
+        PIXI.Assets.add({
+  alias: 'test',
+  src: './cursor.svg'
+});
+await PIXI.Assets.load('test');
+const texture = PIXI.Assets.get("test")
+        rects.push(new Konva.Path({
+		y: 300,
+		fill: "white",
+		// scaleX: .035,
+        // scaleY: .035,
+		rotation: -90,
+        texture: texture
+	}));
 
-        
-        rects.push(new Konva.Rect({
-           width: 63,
-           height: 34,
-           x: 0,
-			y: 0,
-            }));
-        group.add(rects[rects.length-1]);
-        rects.push(new Konva.Text({
-           text: "hello",
-           fill: "#c3c2c5",
-           x: 0,
-			y: 0,
-           fontSize: 30,
-            }));
-        group.add(rects[rects.length-1]);
-     
 
+    // rects[rects.length-1]._object.scale = .5
+
+        const konvaGroup = new Konva.Group({
+			x: 0,
+			y: 0,
+            width: rects[rects.length-1].width(),
+            height: 50
         }) 
-      
+        group.add(konvaGroup);
+      konvaGroup.add(rects[rects.length-1])
+    })
     const animation = new Konva.Animation(() => {
         layer.x(layer.x()+1)
     })

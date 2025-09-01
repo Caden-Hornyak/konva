@@ -69,6 +69,9 @@ export interface NodeConfig {
   offsetX?: number;
   offsetY?: number;
   draggable?: boolean;
+  padding?: number;
+  paddingX?: number;
+  paddingY?: number;
   dragDistance?: number;
   dragBoundFunc?: (this: Node, pos: Vector2d) => Vector2d;
   preventDefault?: boolean;
@@ -84,16 +87,16 @@ const konvaToPIXIAttributeMap = {
       if (text._width === undefined || value === undefined) return;
       
       if (value === "middle") {
-        text.x = text._width / 2;
         text.anchor.x = 0.5;
+        text.x = Math.round(text._width / 2);
       } else if (value === "right") {
-        text.x = text._width;
         text.anchor.x = 1;
+        text.x = Math.round(text._width);
       } else {
         text.anchor.x = 0;
       } 
-      konvaToPIXIAttributeMap.padding(pixiObject, (pixiObject as any)._padding);
-
+      
+      if (value !== "middle") konvaToPIXIAttributeMap.padding(pixiObject, (pixiObject as any)._padding, "x");
     },
     verticalAlign: (pixiObject: PixiObject, value) => {
         const text = pixiObject as any;
@@ -101,15 +104,15 @@ const konvaToPIXIAttributeMap = {
         if (text._height === undefined || value === undefined) return;
 
         if (value === "middle") {
-          text.y = text._height / 2;
           text.anchor.y = 0.5;
+          text.y = Math.round(text._height / 2);
         } else if (value === "bottom") {
-          text.y = text._height;
           text.anchor.y = 1;
+          text.y = Math.round(text._height);
         } else {
           text.anchor.y = 0;
         }
-        konvaToPIXIAttributeMap.padding(pixiObject, (pixiObject as any)._padding);
+        if (value !== "middle") konvaToPIXIAttributeMap.padding(pixiObject, (pixiObject as any)._padding, "y");
     },
     fill: (pixiObject: PixiObject, value) => { 
       if (pixiObject instanceof PIXI.Text) {
@@ -146,16 +149,22 @@ const konvaToPIXIAttributeMap = {
         pixiObject.height = value;
       }
      },
-     padding: (pixiObject: PixiObject, value) => {
+     padding: (pixiObject: PixiObject, value, type: "x" | "y" | "both" = "both") => {
       const item = pixiObject as any;
       if (value !== undefined) item._padding = value;
       if (item._padding) {
         const xDir = item._align === "right" ? -1 : 1;
         const yDir = item._verticalAlign === "bottom" ? -1 : 1;
 
-        if (item._align !== "middle") item.x += xDir * value;
-        if (item._verticalAlign !== "middle") item.y += yDir * value;
+        if (type !== "y" && item._align !== "middle") item.x = Math.round(item.x + xDir * value);
+        if (type !== "x" && item._verticalAlign !== "middle") item.y = Math.round(item.y + yDir * value);
       }
+     },
+     paddingY: (pixiObject: PixiObject, value) => {
+        konvaToPIXIAttributeMap.padding(pixiObject, value, "y");
+     },
+     paddingX: (pixiObject: PixiObject, value) => {
+        konvaToPIXIAttributeMap.padding(pixiObject, value, "x");
      },
      rotation: (pixiObject: PixiObject, value) => { pixiObject.rotation = value * (Math.PI / 180) },
      radius: (pixiObject: PixiObject, value) => { 
@@ -173,6 +182,12 @@ const konvaToPIXIAttributeMap = {
       },
       fontStyle: (pixiObject: PixiObject, value) => { 
         (pixiObject as PIXI.Text).style.fontStyle = value;
+      },
+      scaleX: (pixiObject: PixiObject, value) => { 
+        pixiObject.scale._x = value;
+      },
+      scaleY: (pixiObject: PixiObject, value) => { 
+        pixiObject.scale._y = value;
       },
 
 }
@@ -1578,6 +1593,9 @@ export abstract class Node<Config extends NodeConfig = NodeConfig> {
   >;
   draggable: GetSet<boolean, this>;
   dragDistance: GetSet<number, this>;
+  padding: GetSet<number, this>;
+  paddingX: GetSet<number, this>;
+  paddingY: GetSet<number, this>;
   embossBlend: GetSet<boolean, this>;
   embossDirection: GetSet<string, this>;
   embossStrength: GetSet<number, this>;
@@ -2244,3 +2262,8 @@ Factory.backCompat(Node, {
   setRotationDeg: 'setRotation',
   getRotationDeg: 'getRotation',
 });
+
+addGetterSetter(Node, 'padding', 0);
+addGetterSetter(Node, 'paddingX', 0);
+addGetterSetter(Node, 'paddingY', 0);
+
