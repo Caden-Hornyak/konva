@@ -45,7 +45,6 @@ export class Image extends Shape<ImageConfig> {
 
   constructor(attrs: ImageConfig) {
     super(attrs);
-    return;
     const graphics = new PIXI.Graphics();
     const width = this.getWidth();
     const height = this.getHeight();

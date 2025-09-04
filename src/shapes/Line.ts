@@ -120,11 +120,9 @@ export class Line<
     (this._object as any)._type = "Line";
     this.setAttrs(config);
     this.changePoints();
-    
   }
 
   changePoints() {
-
     const [x1, y1, x2, y2] = this.points();
     const dx = x2 - x1;
     const dy = y2 - y1;
@@ -133,7 +131,6 @@ export class Line<
     this._object.y = y1;
     this._object.width = Math.sqrt(dx * dx + dy * dy);
 
-    // Calculate the rotation and set it
     this._object.rotation = Math.atan2(dy, dx);
     
   }

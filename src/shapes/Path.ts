@@ -44,7 +44,6 @@ export class Path extends Shape<PathConfig> {
     }
 
     this.setAttrs(config);
-    
   }
 
   _readDataAttribute() {

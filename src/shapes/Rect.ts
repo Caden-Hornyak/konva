@@ -35,7 +35,7 @@ const textureCache: Record<string, PIXI.Texture> = {};
  * });
  */
 export class Rect extends Shape<RectConfig> {
-  _object: PIXI.NineSlicePlane
+  _object: PIXI.NineSliceSprite
 
   constructor(config?: RectConfig) {
     super(config);
@@ -93,13 +93,13 @@ export class Rect extends Shape<RectConfig> {
       texture = stages[0].application.renderer.generateTexture(graphics);
       textureCache[textureKey] = texture;
     }
-    this._object = new PIXI.NineSlicePlane(
-      texture, 
-      Math.max(cornerRadiusList[0], cornerRadiusList[3], strokeWidth),
-      Math.max(cornerRadiusList[1], cornerRadiusList[1], strokeWidth),
-      Math.max(cornerRadiusList[1], cornerRadiusList[2], strokeWidth),
-      Math.max(cornerRadiusList[2], cornerRadiusList[3], strokeWidth),
-    );
+    this._object = new PIXI.NineSliceSprite({
+      texture: texture, 
+      leftWidth: Math.max(cornerRadiusList[0], cornerRadiusList[3], strokeWidth),
+      topHeight: Math.max(cornerRadiusList[1], cornerRadiusList[1], strokeWidth),
+      rightWidth: Math.max(cornerRadiusList[1], cornerRadiusList[2], strokeWidth),
+      bottomHeight: Math.max(cornerRadiusList[2], cornerRadiusList[3], strokeWidth),
+    });
     
     this.setAttrs(config);
   }

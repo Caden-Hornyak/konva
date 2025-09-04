@@ -6,104 +6,10 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/8.12.0/pixi.min.js"></script>
 <script src="https://unpkg.com/uuid@8.3.2/dist/umd/uuid.min.js"></script>
     <script src="konva.js"></script>
-  
-  <style>
-    body {
-      margin: 0;
-      overflow: hidden;
-    }
-    #stage-container {
-      width: 100vw;
-      height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background-color: #eee;
-    }
-    #special-button {
-        position: fixed;
-        top: 0;
-        left: 0;
-    }
-    #special-button2 {
-        position: absolute;
-        top: 20%;
-        left: 20%;
-    }
-  </style>
 </head>
 <body>
   <div id="stage-container"></div>
     <script>
-        Konva.enableTrace = true
-        let stage;
-        let layer;
-    const func = async () => {
-        stage = await Konva.Stage.create({ container: 'stage-container', width: 1000, height: 1000, x: 0, y: 0, backgroundColor: "#4a4c48" });
-
-        layer = new Konva.Layer(  );
-        
-    
-        stage.add(layer);
-    }
-    
-     let rects = [];
-     let group
-     const colors = ['red', 'black', 'blue', 'green', 'yellow', 'orange']
-      func().then(async () => {
-        group = new Konva.Group({
-        width: 200,
-           height: 100,
-        x: 100,
-         y: 100
-    })
-        layer.add(group)
-        
-        PIXI.Assets.add({
-  alias: 'test',
-  src: './cursor.svg'
-});
-await PIXI.Assets.load('test');
-const texture = PIXI.Assets.get("test")
-        rects.push(new Konva.Path({
-		y: 300,
-		fill: "white",
-		// scaleX: .035,
-        // scaleY: .035,
-		rotation: -90,
-        texture: texture
-	}));
-
-
-    // rects[rects.length-1]._object.scale = .5
-
-        const konvaGroup = new Konva.Group({
-			x: 0,
-			y: 0,
-            width: rects[rects.length-1].width(),
-            height: 50
-        }) 
-        group.add(konvaGroup);
-      konvaGroup.add(rects[rects.length-1])
-    })
-    const animation = new Konva.Animation(() => {
-        layer.x(layer.x()+1)
-    })
-    
-    const newFunc = () => {
-        group.add(rects[rects.length-1])
-    }
-    const newFunc2 = () => {
-       console.log(rects[rects.length-1].width(), rects[rects.length-1].height())
-    }
-
-    let lastTime = performance.now();
-let frameCount = 0;
-let fps = 0;
-
-
     </script>
-    <button id="special-button" onclick="newFunc()"> LCIK ME</button>
-    <button id="special-button2" onclick="newFunc2()"> NEW</button>
 </body>
 </html>

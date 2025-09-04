@@ -28,21 +28,22 @@ export interface CircleConfig extends ShapeConfig {
  * });
  */
 export class Circle extends Shape<CircleConfig> {
-    _object: PIXI.Graphics;
+  _object: PIXI.Graphics;
 
-    constructor(config?: CircleConfig) {
-      super(config);
+  constructor(config?: CircleConfig) {
+    super(config);
 
-      this._object = new PIXI.Graphics()
-      .beginPath()
-      .fill(this.fill() ?? 0xffffff)
-      .setStrokeStyle({
-          width: config?.strokeWidth ?? 0, 
-          color: (config?.stroke ?? "black") as string
-      })
-      .arc(0, 0, this.attrs.radius || 0, 0, Math.PI * 2, false);
-      this.setAttrs(config);
-    }
+    this._object = new PIXI.Graphics()
+    .beginPath()
+    .fill(this.fill() ?? 0xffffff)
+    .setStrokeStyle({
+        width: config?.strokeWidth ?? 0, 
+        color: (config?.stroke ?? "black") as string
+    })
+    .arc(0, 0, this.attrs.radius || 0, 0, Math.PI * 2, false);
+    this.setAttrs(config);
+  }
+
   getWidth() {
     return this.radius() * 2;
   }
